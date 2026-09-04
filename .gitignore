@@ -1,0 +1,61 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+Debug/
+Release/
+x64/
+x86/
+.vs/
+*.nupkg
+
+# Node.js
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# IDE
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+appsettings.Development.json
+appsettings.Local.json
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+Logs/
+npm-debug.log*
+
+# Uploads
+uploads/
+
+# Test results
+TestResults/
+coverage/

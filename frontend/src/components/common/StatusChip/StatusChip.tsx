@@ -1,11 +1,9 @@
 import React from 'react';
-import { Chip, ChipProps } from '@mui/material';
-
-type StatusVariant = 'active' | 'inactive' | 'draft' | 'locked' | 'finalized';
+import { Chip, type ChipProps } from '@mui/material';
 
 interface StatusChipProps {
   status: string;
-  variant?: StatusVariant;
+  size?: 'small' | 'medium';
 }
 
 const getStatusColor = (status: string): ChipProps['color'] => {
@@ -21,17 +19,22 @@ const getStatusColor = (status: string): ChipProps['color'] => {
 const getVariant = (status: string): ChipProps['variant'] => {
   const lower = status.toLowerCase();
   if (lower === 'active' || lower === 'published') return 'filled';
-  if (lower === 'inactive' || lower === 'archived') return 'outlined';
   return 'filled';
 };
 
-export const StatusChip: React.FC<StatusChipProps> = ({ status, variant }) => {
+export const StatusChip: React.FC<StatusChipProps> = ({ status, size = 'small' }) => {
   return (
     <Chip
       label={status}
       color={getStatusColor(status)}
       variant={getVariant(status)}
-      size="small"
+      size={size}
+      sx={{
+        borderRadius: '9999px',
+        fontWeight: 500,
+        height: size === 'small' ? 24 : 28,
+        fontSize: size === 'small' ? 12 : 13,
+      }}
     />
   );
 };

@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Domain\ITI.ERP.Domain\ITI.ERP.Domain.csproj" />
+    <ProjectReference Include="..\..\Shared\ITI.ERP.Shared\ITI.ERP.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="AutoMapper" Version="13.0.1" />
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="NPOI" Version="2.7.2" />
+    <PackageReference Include="FluentValidation" Version="11.11.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Abstractions" Version="9.0.2" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Location\IndiaStates.json" />
+    <EmbeddedResource Include="Location\IndiaPinCodes.json" />
+  </ItemGroup>
+
+</Project>

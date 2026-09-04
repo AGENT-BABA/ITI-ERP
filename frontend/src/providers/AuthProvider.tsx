@@ -1,12 +1,18 @@
 import { createContext, useCallback, useMemo, useState } from 'react';
-import { login as apiLogin, logout as apiLogout } from '../api/auth.api';
-import { setToken, setRefreshToken, clearAuthData, getToken } from '../utils/tokenUtils';
+import { login as apiLogin, logout as apiLogout, switchSession as apiSwitchSession } from '../api/auth.api';
+import { setToken, setRefreshToken, clearAuthData, getToken, getPermissionsFromToken, getInstituteIdFromToken, getTradeIdFromToken, getAcademicSessionIdFromToken } from '../utils/tokenUtils';
+import { queryClient } from '../App';
 
 export interface User {
   id: string;
   username: string;
+  firstName: string;
+  lastName: string;
   grNumber: string;
   role: string;
+  instituteId?: string;
+  tradeId?: string;
+  academicSessionId?: string;
   permissions: string[];
 }
 
@@ -15,6 +21,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (grNumber: string, username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  switchSession: (sessionId: string) => Promise<boolean>;
+  isSwitchingSession: boolean;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -27,25 +35,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(() => {
     try {
       const stored = localStorage.getItem('iti_erp_user');
-      return stored ? JSON.parse(stored) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const token = getToken();
+        if (token) {
+          parsed.permissions = getPermissionsFromToken(token);
+          parsed.academicSessionId = getAcademicSessionIdFromToken(token);
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
   });
 
+  const [isSwitchingSession, setIsSwitchingSession] = useState(false);
+
   const login = useCallback(async (grNumber: string, username: string, password: string): Promise<boolean> => {
     try {
       const response = await apiLogin({ grNumber, username, password });
 
-      setToken(response.token);
+      setToken(response.accessToken);
       setRefreshToken(response.refreshToken);
 
       const newUser: User = {
-        id: response.userId,
-        username: response.username,
-        grNumber: response.instituteId,
-        role: response.role,
-        permissions: response.permissions || [],
+        id: response.user.id,
+        username: response.user.username,
+        firstName: response.user.firstName,
+        lastName: response.user.lastName,
+        grNumber: grNumber,
+        role: response.user.roles[0] || '',
+        instituteId: getInstituteIdFromToken(response.accessToken),
+        tradeId: getTradeIdFromToken(response.accessToken) || response.user.tradeId,
+        academicSessionId: getAcademicSessionIdFromToken(response.accessToken),
+        permissions: getPermissionsFromToken(response.accessToken),
       };
 
       localStorage.setItem('iti_erp_user', JSON.stringify(newUser));
@@ -53,6 +77,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return true;
     } catch {
       return false;
+    }
+  }, []);
+
+  const switchSession = useCallback(async (sessionId: string): Promise<boolean> => {
+    setIsSwitchingSession(true);
+    try {
+      const response = await apiSwitchSession(sessionId);
+
+      setToken(response.accessToken);
+      setRefreshToken(response.refreshToken);
+
+      setUser((prev) => {
+        if (!prev) return null;
+        const updated: User = {
+          ...prev,
+          academicSessionId: getAcademicSessionIdFromToken(response.accessToken),
+          permissions: getPermissionsFromToken(response.accessToken),
+        };
+        localStorage.setItem('iti_erp_user', JSON.stringify(updated));
+        return updated;
+      });
+
+      queryClient.clear();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setIsSwitchingSession(false);
     }
   }, []);
 
@@ -76,8 +128,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: !!user,
       login,
       logout,
+      switchSession,
+      isSwitchingSession,
     }),
-    [user, login, logout]
+    [user, login, logout, switchSession, isSwitchingSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

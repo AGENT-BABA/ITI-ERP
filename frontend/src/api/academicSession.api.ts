@@ -1,20 +1,17 @@
 import axiosClient from './axiosClient';
-import { PaginatedResponse, PaginationRequest, AcademicSession } from '../types/common.types';
+import type { PaginatedResponse, PaginationRequest, AcademicSession } from '../types/common.types';
 
 export interface CreateAcademicSessionRequest {
+  instituteId?: string;
   sessionYear: string;
   startDate: string;
   endDate: string;
-  isActive: boolean;
-  isLocked: boolean;
 }
 
 export interface UpdateAcademicSessionRequest {
   sessionYear?: string;
   startDate?: string;
   endDate?: string;
-  isActive?: boolean;
-  isLocked?: boolean;
 }
 
 export async function getAcademicSessions(params: PaginationRequest): Promise<PaginatedResponse<AcademicSession>> {
@@ -38,9 +35,13 @@ export async function updateAcademicSession(id: string, data: UpdateAcademicSess
 }
 
 export async function activateSession(id: string): Promise<void> {
-  await axiosClient.post(`/academic-sessions/${id}/activate`);
+  await axiosClient.put(`/academic-sessions/${id}/activate`);
 }
 
 export async function lockSession(id: string): Promise<void> {
-  await axiosClient.post(`/academic-sessions/${id}/lock`);
+  await axiosClient.put(`/academic-sessions/${id}/lock`);
+}
+
+export async function deleteAcademicSession(id: string): Promise<void> {
+  await axiosClient.delete(`/academic-sessions/${id}`);
 }

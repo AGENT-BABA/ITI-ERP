@@ -12,11 +12,15 @@ export interface MonthlyPractical {
   year: number;
   name: string;
   description?: string;
-  totalMarks: number;
-  passMarks: number;
+  assessorName?: string;
+  learningOutcome?: string;
+  professionalSkillName?: string;
+  startDate?: string;
+  endDate?: string;
   isLocked: boolean;
   marksEnteredCount: number;
   totalStudents: number;
+  passMarks: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -27,9 +31,19 @@ export interface PracticalMark {
   studentId: string;
   studentName?: string;
   rollNumber?: string;
-  marksObtained: number;
-  totalMarks?: number;
+  safetyConsciousness: number;
+  workplaceHygiene: number;
+  attendancePunctuality: number;
+  followInstructions: number;
+  applicationKnowledge: number;
+  skillsToolsEquipment: number;
+  speedDoingWork: number;
+  qualityWorkmanship: number;
+  viva: number;
+  totalObtained: number;
+  totalMarks: number;
   isPassed: boolean;
+  signedByTrainee: boolean;
   remarks?: string;
   markedByUserName?: string;
   createdAt: string;
@@ -60,22 +74,32 @@ export interface CreateMonthlyPracticalRequest {
   year: number;
   name: string;
   description?: string;
-  totalMarks: number;
-  passMarks: number;
+  assessorName?: string;
+  learningOutcome?: string;
+  professionalSkillName?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface UpdateMonthlyPracticalRequest {
   name?: string;
   description?: string;
-  totalMarks?: number;
-  passMarks?: number;
 }
 
 export interface SubmitPracticalMarksRequest {
   monthlyPracticalId: string;
   students: {
     studentId: string;
-    marksObtained: number;
+    safetyConsciousness: number;
+    workplaceHygiene: number;
+    attendancePunctuality: number;
+    followInstructions: number;
+    applicationKnowledge: number;
+    skillsToolsEquipment: number;
+    speedDoingWork: number;
+    qualityWorkmanship: number;
+    viva: number;
+    signedByTrainee: boolean;
     remarks?: string;
   }[];
 }
@@ -115,6 +139,10 @@ export async function lockPractical(id: string): Promise<void> {
 
 export async function unlockPractical(id: string, reason: string): Promise<void> {
   await axiosClient.put(`/practicals/${id}/unlock`, null, { params: { reason } });
+}
+
+export async function deleteMonthlyPractical(id: string): Promise<void> {
+  await axiosClient.delete(`/practicals/${id}`);
 }
 
 export async function getPracticalReport(id: string): Promise<PracticalReport> {

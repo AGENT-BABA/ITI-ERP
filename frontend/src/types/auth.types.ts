@@ -5,23 +5,27 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  token: string;
+  accessToken: string;
   refreshToken: string;
-  expiration: string;
-  userId: string;
-  username: string;
-  role: string;
-  instituteId: string;
-  instituteName: string;
-  permissions: string[];
+  expiresAt: string;
+  user: {
+    id: string;
+    username: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    roles: string[];
+    tradeId?: string;
+  };
 }
 
 export interface RefreshTokenRequest {
   refreshToken: string;
+  academicSessionId?: string;
 }
 
 export interface TokenResponse {
-  token: string;
+  accessToken: string;
   refreshToken: string;
-  expiration: string;
+  expiresAt: string;
 }

@@ -17,6 +17,7 @@ export interface StudentAttendanceReport {
   mlDays: number;
   hoDays: number;
   attendancePercentage: number;
+  attendanceThresholdPercentage: number;
   dailyRecords: DailyAttendance[];
 }
 
@@ -33,6 +34,7 @@ export interface TradeAttendanceReport {
   fromDate: string;
   toDate: string;
   totalWorkingDays: number;
+  attendanceThresholdPercentage: number;
   students: StudentAttendanceSummary[];
   summary: TradeAttendanceSummary;
 }
@@ -57,8 +59,8 @@ export interface TradeAttendanceSummary {
   averageAttendance: number;
   highestAttendanceDays: number;
   lowestAttendanceDays: number;
-  studentsAbove75: number;
-  studentsBelow75: number;
+  studentsAboveThreshold: number;
+  studentsBelowThreshold: number;
 }
 
 export interface MonthlyPracticalReport {
@@ -147,6 +149,7 @@ export interface InstituteSummaryReport {
   totalTrades: number;
   totalUsers: number;
   overallAttendancePercentage: number;
+  attendanceThresholdPercentage: number;
   overallPracticalPassPercentage: number;
   trades: TradeSummary[];
 }
@@ -161,13 +164,13 @@ export interface TradeSummary {
   attendancePercentage: number;
 }
 
-export async function getStudentAttendanceReport(studentId: string, fromDate: string, toDate: string): Promise<StudentAttendanceReport> {
-  const response = await axiosClient.get<StudentAttendanceReport>(`/reports/student/${studentId}/attendance`, { params: { fromDate, toDate } });
+export async function getStudentAttendanceReport(studentId: string, month: number, year: number): Promise<StudentAttendanceReport> {
+  const response = await axiosClient.get<StudentAttendanceReport>(`/reports/student/${studentId}/attendance`, { params: { month, year } });
   return response.data;
 }
 
-export async function getTradeAttendanceReport(tradeId: string, fromDate: string, toDate: string): Promise<TradeAttendanceReport> {
-  const response = await axiosClient.get<TradeAttendanceReport>(`/reports/trade/${tradeId}/attendance`, { params: { fromDate, toDate } });
+export async function getTradeAttendanceReport(tradeId: string, month: number, year: number): Promise<TradeAttendanceReport> {
+  const response = await axiosClient.get<TradeAttendanceReport>(`/reports/trade/${tradeId}/attendance`, { params: { month, year } });
   return response.data;
 }
 
@@ -186,7 +189,120 @@ export async function getStudentPerformanceReport(studentId: string): Promise<St
   return response.data;
 }
 
-export async function getInstituteSummaryReport(): Promise<InstituteSummaryReport> {
-  const response = await axiosClient.get<InstituteSummaryReport>('/reports/institute-summary');
+export async function getInstituteSummaryReport(instituteId: string): Promise<InstituteSummaryReport> {
+  const response = await axiosClient.get<InstituteSummaryReport>('/reports/institute-summary', { params: { instituteId } });
+  return response.data;
+}
+
+export interface ProgressiveAttendanceReport {
+  studentId: string;
+  studentName?: string;
+  rollNumber?: string;
+  tradeCode?: string;
+  tradeName?: string;
+  sessionYear?: string;
+  sessionStartDate: string;
+  attendanceThresholdPercentage: number;
+  months: MonthlyAttendanceBreakdown[];
+  cumulative: CumulativeAttendance;
+}
+
+export interface MonthlyAttendanceBreakdown {
+  month: number;
+  monthName: string;
+  workingDays: number;
+  present: number;
+  absent: number;
+  late: number;
+  cl: number;
+  el: number;
+  ml: number;
+  ho: number;
+  attendancePercentage: number;
+}
+
+export interface CumulativeAttendance {
+  totalWorkingDays: number;
+  totalPresent: number;
+  totalAbsent: number;
+  totalLate: number;
+  totalCL: number;
+  totalEL: number;
+  totalML: number;
+  totalHO: number;
+  cumulativePercentage: number;
+}
+
+export async function getProgressiveReport(studentId: string): Promise<ProgressiveAttendanceReport> {
+  const response = await axiosClient.get<ProgressiveAttendanceReport>(`/reports/student/${studentId}/progressive`);
+  return response.data;
+}
+
+export interface ProgressCard {
+  instituteName?: string;
+  instituteAddress?: string;
+  instituteLogoPath?: string;
+  studentName?: string;
+  motherName?: string;
+  fatherName?: string;
+  dateOfBirth?: string;
+  admissionDate?: string;
+  admissionNumber?: string;
+  rollNumber?: string;
+  religion?: string;
+  category?: string;
+  educationQualification?: string;
+  address?: string;
+  phone?: string;
+  aadharNumber?: string;
+  gender?: string;
+  tradeName?: string;
+  tradeCode?: string;
+  durationInMonths: number;
+  yearLevel: number;
+  yearLevelLabel?: string;
+  monthlyPracticals: ProgressCardMonthlyPractical[];
+  monthlyMarks: ProgressCardMonthlyMark[];
+  quarterlyAssessments: ProgressCardQuarterlyAssessment[];
+}
+
+export interface ProgressCardMonthlyPractical {
+  month: number;
+  year: number;
+  monthName?: string;
+  weekNumber?: number;
+  practicalName?: string;
+  professionalSkillName?: string;
+  totalObtained: number;
+  totalMarks: number;
+}
+
+export interface ProgressCardMonthlyMark {
+  month: number;
+  year: number;
+  monthName?: string;
+  practicalMarks: number;
+  practicalMarksScaled: number;
+  partATT: number;
+  partBES: number;
+  partsRecalSci: number;
+  engDrg: number;
+  total: number;
+}
+
+export interface ProgressCardQuarterlyAssessment {
+  quarter: number;
+  possibleDays: number;
+  workingDays: number;
+  attendancePercentage: number;
+  sessionalPRT: number;
+  sessionalTT: number;
+  sessionalWCalSci: number;
+  sessionalEngDrg: number;
+  sessionalTotal: number;
+}
+
+export async function getProgressCard(studentId: string): Promise<ProgressCard> {
+  const response = await axiosClient.get<ProgressCard>(`/reports/student/${studentId}/progress-card`);
   return response.data;
 }

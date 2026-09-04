@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
   Chip,
   IconButton,
+  Snackbar,
   Tooltip,
-  Typography,
+  Alert,
 } from '@mui/material';
-import { Add as AddIcon, Visibility as ViewIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Add as AddIcon, Visibility as ViewIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../components/common/DataTable/DataTable';
-import { getMonthlyPracticals } from '../../api/practical.api';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { PageHeader } from '../../components/common/PageHeader/PageHeader';
+import { getMonthlyPracticals, deleteMonthlyPractical } from '../../api/practical.api';
 import type { MonthlyPractical } from '../../api/practical.api';
 
 const MONTH_NAMES = [
@@ -21,9 +24,13 @@ const MONTH_NAMES = [
 
 export default function PracticalListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<MonthlyPractical | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
   const { data, isLoading } = useQuery({
     queryKey: ['monthlyPracticals', page, pageSize, searchTerm],
@@ -35,6 +42,22 @@ export default function PracticalListPage() {
       }),
   });
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteMonthlyPractical(deleteTarget.id);
+      queryClient.invalidateQueries({ queryKey: ['monthlyPracticals'] });
+      setSnackbar({ open: true, message: 'Practical deleted successfully', severity: 'success' });
+    } catch (err: any) {
+      const apiError = err.response?.data?.error || err.response?.data?.message || 'Failed to delete practical';
+      setSnackbar({ open: true, message: apiError, severity: 'error' });
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   const columns: Column<MonthlyPractical>[] = [
     { id: 'name', label: 'Practical Name', sortable: true },
     { id: 'tradeCode', label: 'Trade', render: (row) => `${row.tradeCode || '-'} - ${row.tradeName || '-'}` },
@@ -44,8 +67,8 @@ export default function PracticalListPage() {
       sortable: true,
       render: (row) => `${MONTH_NAMES[row.month]} ${row.year}`,
     },
-    { id: 'totalMarks', label: 'Total Marks' },
-    { id: 'passMarks', label: 'Pass Marks' },
+    { id: 'professionalSkillName', label: 'Professional Skill', render: (row) => row.professionalSkillName || '-' },
+    { id: 'assessorName', label: 'Assessor', render: (row) => row.assessorName || '-' },
     {
       id: 'marksEnteredCount',
       label: 'Marks Entered',
@@ -78,11 +101,13 @@ export default function PracticalListPage() {
               <ViewIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => navigate(`/practicals/${row.id}/edit`)}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {!row.isLocked && (
+            <Tooltip title="Delete">
+              <IconButton size="small" color="error" onClick={() => setDeleteTarget(row)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       ),
     },
@@ -90,18 +115,18 @@ export default function PracticalListPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Monthly Practicals
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/practicals/new')}
-        >
-          Add Practical
-        </Button>
-      </Box>
+      <PageHeader
+        title="Monthly Practicals"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/practicals/new')}
+          >
+            Add Practical
+          </Button>
+        }
+      />
 
       <DataTable
         columns={columns}
@@ -120,6 +145,27 @@ export default function PracticalListPage() {
         searchable
         onSearch={setSearchTerm}
       />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        onConfirm={handleDelete}
+        title="Delete Practical"
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        severity="error"
+      />
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} variant="filled" onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

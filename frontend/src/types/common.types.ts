@@ -1,3 +1,31 @@
+export const YearLevel = {
+  FirstYear: 1,
+  SecondYear: 2,
+} as const;
+
+export type YearLevel = typeof YearLevel[keyof typeof YearLevel];
+
+export const YEAR_LEVEL_LABELS: Record<YearLevel, string> = {
+  [YearLevel.FirstYear]: 'First Year',
+  [YearLevel.SecondYear]: 'Second Year',
+};
+
+export const BatchComputedStatus = {
+  NotStarted: 0,
+  FirstYear: 1,
+  SecondYear: 2,
+  Completed: 3,
+} as const;
+
+export type BatchComputedStatus = typeof BatchComputedStatus[keyof typeof BatchComputedStatus];
+
+export const BATCH_STATUS_LABELS: Record<BatchComputedStatus, string> = {
+  [BatchComputedStatus.NotStarted]: 'Not Started',
+  [BatchComputedStatus.FirstYear]: 'First Year',
+  [BatchComputedStatus.SecondYear]: 'Second Year',
+  [BatchComputedStatus.Completed]: 'Completed',
+};
+
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
@@ -35,6 +63,10 @@ export interface User {
   isActive: boolean;
   isLocked: boolean;
   roles: string[];
+  instituteId?: string;
+  tradeId?: string;
+  batchId?: string;
+  batchName?: string;
   lastLoginAt?: string;
 }
 
@@ -44,6 +76,7 @@ export interface Institute {
   name: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   phone?: string;
   email?: string;
@@ -54,15 +87,20 @@ export interface Institute {
 
 export interface AcademicSession {
   id: string;
+  instituteId: string;
   sessionYear: string;
   startDate: string;
   endDate: string;
   isActive: boolean;
   isLocked: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Trade {
   id: string;
+  instituteId: string;
+  academicSessionId?: string;
   name: string;
   code: string;
   durationInMonths: number;
@@ -70,6 +108,35 @@ export interface Trade {
   headUserId?: string;
   headUserName?: string;
   draftStatus: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Batch {
+  id: string;
+  instituteId: string;
+  tradeId: string;
+  tradeName?: string;
+  tradeCode?: string;
+  tradeDurationInMonths?: number;
+  startAcademicSessionId: string;
+  startSessionYear?: string;
+  startDate: string;
+  name: string;
+  code?: string;
+  capacity?: number;
+  isActive: boolean;
+  studentCount: number;
+  computedStatus: BatchComputedStatus;
+  computedYearLevel?: number;
+  computedYearLevelLabel: string;
+  createdAt: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 export interface AuditLog {
@@ -98,6 +165,7 @@ export interface Student {
   email?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   pinCode?: string;
   fatherName?: string;
@@ -107,6 +175,8 @@ export interface Student {
   tradeId: string;
   tradeName?: string;
   tradeCode?: string;
+  batchId?: string;
+  batchName?: string;
   rollNumber: string;
   admissionNumber: string;
   admissionDate: string;
@@ -118,6 +188,8 @@ export interface Student {
   previousPercentage?: number;
   status: number;
   statusReason?: string;
+  withdrawalDate?: string;
+  withdrawalReason?: string;
   aadharNumber?: string;
   photoPath?: string;
   emergencyContactName?: string;

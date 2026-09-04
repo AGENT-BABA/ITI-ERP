@@ -1,6 +1,7 @@
 import axiosClient from './axiosClient';
 
 export interface DashboardSummary {
+  totalInstitutes: number;
   totalStudents: number;
   activeStudents: number;
   totalTrades: number;
@@ -12,6 +13,7 @@ export interface DashboardSummary {
   totalYearlyPracticals: number;
   monthlyPracticalPassPercentage: number;
   yearlyPracticalPassPercentage: number;
+  tradeName?: string;
   tradeSeatOccupancy: TradeSeatOccupancy[];
   recentActivities: RecentActivity[];
   attendanceTrends: AttendanceTrend[];

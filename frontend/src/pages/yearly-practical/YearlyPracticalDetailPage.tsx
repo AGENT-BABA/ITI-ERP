@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -8,19 +8,52 @@ import {
   CardContent,
   Chip,
   Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
   Snackbar,
   Alert,
+  CircularProgress,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import { Save as SaveIcon, Lock as LockIcon } from '@mui/icons-material';
-import DataTable, { type Column } from '../../components/common/DataTable/DataTable';
-import { getYearlyPracticalById, getYearlyPracticalMarks, submitYearlyPracticalMarks, lockYearlyPractical } from '../../api/yearlyPractical.api';
-import type { YearlyPracticalMark } from '../../api/yearlyPractical.api';
+import {
+  Lock as LockIcon,
+  ArrowBack as ArrowBackIcon,
+  Visibility as ViewIcon,
+} from '@mui/icons-material';
+
+import {
+  getYearlyPracticalById,
+  getYearlyPracticalStudents,
+  lockYearlyPractical,
+} from '../../api/yearlyPractical.api';
+import { useAuth } from '../../hooks/useAuth';
+
+const ACADEMIC_MONTHS = [
+  { month: 8, label: 'Aug' },
+  { month: 9, label: 'Sep' },
+  { month: 10, label: 'Oct' },
+  { month: 11, label: 'Nov' },
+  { month: 12, label: 'Dec' },
+  { month: 1, label: 'Jan' },
+  { month: 2, label: 'Feb' },
+  { month: 3, label: 'Mar' },
+  { month: 4, label: 'Apr' },
+  { month: 5, label: 'May' },
+  { month: 6, label: 'Jun' },
+  { month: 7, label: 'Jul' },
+];
 
 export default function YearlyPracticalDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [studentMarks, setStudentMarks] = useState<Record<string, number>>({});
-  const [studentRemarks, setStudentRemarks] = useState<Record<string, string>>({});
+  const { hasPermission } = useAuth();
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const { data: practical, isLoading: loadingPractical } = useQuery({
@@ -29,22 +62,10 @@ export default function YearlyPracticalDetailPage() {
     enabled: !!id,
   });
 
-  const { data: marks, isLoading: loadingMarks } = useQuery({
-    queryKey: ['yearlyPracticalMarks', id],
-    queryFn: () => getYearlyPracticalMarks(id!),
+  const { data: students, isLoading: loadingStudents } = useQuery({
+    queryKey: ['yearlyPracticalStudents', id],
+    queryFn: () => getYearlyPracticalStudents(id!),
     enabled: !!id,
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: submitYearlyPracticalMarks,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['yearlyPracticalMarks', id] });
-      queryClient.invalidateQueries({ queryKey: ['yearlyPractical', id] });
-      setSnackbar({ open: true, message: 'Marks saved successfully', severity: 'success' });
-    },
-    onError: () => {
-      setSnackbar({ open: true, message: 'Failed to save marks', severity: 'error' });
-    },
   });
 
   const lockMutation = useMutation({
@@ -58,121 +79,49 @@ export default function YearlyPracticalDetailPage() {
     },
   });
 
-  const handleSave = () => {
-    if (!id) return;
-
-    const students = Object.entries(studentMarks).map(([studentId, marksObtained]) => ({
-      studentId,
-      marksObtained,
-      remarks: studentRemarks[studentId] || undefined,
-    }));
-
-    submitMutation.mutate({
-      yearlyPracticalId: id,
-      students,
-    });
-  };
-
-  const columns: Column<YearlyPracticalMark>[] = [
-    { id: 'rollNumber', label: 'Roll No.', sortable: true },
-    { id: 'studentName', label: 'Student Name', sortable: true },
-    {
-      id: 'marksObtained',
-      label: 'Marks Obtained',
-      render: (row) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <input
-            type="number"
-            min={0}
-            max={practical?.totalMarks || 100}
-            value={studentMarks[row.studentId] ?? row.marksObtained}
-            onChange={(e) => {
-              const val = parseFloat(e.target.value) || 0;
-              setStudentMarks((prev) => ({ ...prev, [row.studentId]: val }));
-            }}
-            disabled={practical?.isLocked}
-            style={{
-              width: 80,
-              padding: '4px 8px',
-              border: '1px solid #ccc',
-              borderRadius: 4,
-              fontSize: 14,
-            }}
-          />
-          <Typography variant="body2" color="text.secondary">
-            / {row.totalMarks}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      id: 'isPassed',
-      label: 'Result',
-      render: (row) => {
-        const marks = studentMarks[row.studentId] ?? row.marksObtained;
-        const passed = marks >= (practical?.passMarks || 0);
-        return (
-          <Chip
-            label={passed ? 'Pass' : 'Fail'}
-            color={passed ? 'success' : 'error'}
-            size="small"
-          />
-        );
-      },
-    },
-    {
-      id: 'remarks',
-      label: 'Remarks',
-      render: (row) => (
-        <input
-          type="text"
-          value={studentRemarks[row.studentId] ?? row.remarks ?? ''}
-          onChange={(e) => setStudentRemarks((prev) => ({ ...prev, [row.studentId]: e.target.value }))}
-          disabled={practical?.isLocked}
-          placeholder="Remarks"
-          style={{
-            width: 150,
-            padding: '4px 8px',
-            border: '1px solid #ccc',
-            borderRadius: 4,
-            fontSize: 14,
-          }}
-        />
-      ),
-    },
-  ];
-
-  if (loadingPractical) {
-    return <Typography>Loading...</Typography>;
+  if (loadingPractical || loadingStudents) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (!practical) {
-    return <Typography>Practical not found.</Typography>;
+    return (
+      <Box sx={{ textAlign: 'center', py: 8 }}>
+        <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+          Practical not found.
+        </Typography>
+        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/yearly-practicals')}>
+          Back to Yearly Practicals
+        </Button>
+      </Box>
+    );
   }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          {practical.name}
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/yearly-practicals')}>
+            Back
+          </Button>
+          <Typography variant="h4" sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2.125rem' } }}>
+            {practical.name}
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={handleSave}
-            disabled={practical.isLocked || submitMutation.isPending}
-          >
-            Save Marks
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<LockIcon />}
-            onClick={() => lockMutation.mutate()}
-            disabled={practical.isLocked || lockMutation.isPending}
-          >
-            Lock
-          </Button>
+          {hasPermission('Practical.Lock') && !practical.isLocked && (
+            <Button
+              variant="outlined"
+              startIcon={<LockIcon />}
+              onClick={() => lockMutation.mutate()}
+              disabled={lockMutation.isPending}
+            >
+              Lock
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -186,13 +135,7 @@ export default function YearlyPracticalDetailPage() {
               <strong>Year:</strong> {practical.year}
             </Typography>
             <Typography>
-              <strong>Total Marks:</strong> {practical.totalMarks}
-            </Typography>
-            <Typography>
-              <strong>Pass Marks:</strong> {practical.passMarks}
-            </Typography>
-            <Typography>
-              <strong>Marks Entered:</strong> {practical.marksEnteredCount}/{practical.totalStudents}
+              <strong>Students:</strong> {students?.length ?? 0}
             </Typography>
             <Chip
               label={practical.isLocked ? 'Locked' : 'Open'}
@@ -209,16 +152,75 @@ export default function YearlyPracticalDetailPage() {
 
       {practical.isLocked && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          This practical is locked. Unlock to make changes.
+          This practical is locked. Editing is disabled.
         </Alert>
       )}
 
-      <DataTable
-        columns={columns}
-        data={(marks as any[]) || []}
-        loading={loadingMarks}
-        searchable
-      />
+      <TableContainer component={Paper}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700 }}>Roll No.</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Student Name</TableCell>
+              {ACADEMIC_MONTHS.map(m => (
+                <TableCell key={m.month} sx={{ fontWeight: 700, textAlign: 'center' }}>
+                  {m.label}
+                </TableCell>
+              ))}
+              <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Annual Total</TableCell>
+              <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Action</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(!students || students.length === 0) ? (
+              <TableRow>
+                <TableCell colSpan={15} sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography color="text.secondary">
+                    No students found for this trade.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              students.map((row) => (
+                <TableRow key={row.studentId} hover>
+                  <TableCell>{row.rollNumber || '-'}</TableCell>
+                  <TableCell>{row.studentName || '-'}</TableCell>
+                  {ACADEMIC_MONTHS.map(m => {
+                    const pr = row.monthlyPRs.find(p => p.month === m.month);
+                    return (
+                      <TableCell key={m.month} sx={{ textAlign: 'center' }}>
+                        {pr?.pr != null ? (
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {pr.pr.toFixed(1)}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">—</Typography>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell sx={{ textAlign: 'center' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {row.annualTotal.toFixed(1)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: 'center' }}>
+                    <Tooltip title="View / Edit Sheet">
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => navigate(`/yearly-practicals/${id}/student/${row.studentId}`)}
+                      >
+                        <ViewIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       <Snackbar
         open={snackbar.open}

@@ -48,3 +48,42 @@ export function clearAuthData(): void {
   removeRefreshToken();
   localStorage.removeItem(USER_KEY);
 }
+
+export function getPermissionsFromToken(token: string): string[] {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const permissionClaim = payload.permission;
+    if (Array.isArray(permissionClaim)) return permissionClaim;
+    if (typeof permissionClaim === 'string') return [permissionClaim];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function getInstituteIdFromToken(token: string): string | undefined {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.instituteId || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getTradeIdFromToken(token: string): string | undefined {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.tradeId || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getAcademicSessionIdFromToken(token: string): string | undefined {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.academicSessionId || undefined;
+  } catch {
+    return undefined;
+  }
+}

@@ -6,6 +6,7 @@ export interface CreateInstituteRequest {
   name: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   phone?: string;
   email?: string;
@@ -14,9 +15,11 @@ export interface CreateInstituteRequest {
 }
 
 export interface UpdateInstituteRequest {
+  grNumber?: string;
   name?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   phone?: string;
   email?: string;
@@ -42,4 +45,8 @@ export async function createInstitute(data: CreateInstituteRequest): Promise<Ins
 export async function updateInstitute(id: string, data: UpdateInstituteRequest): Promise<Institute> {
   const response = await axiosClient.put<Institute>(`/institutes/${id}`, data);
   return response.data;
+}
+
+export async function deleteInstitute(id: string): Promise<void> {
+  await axiosClient.delete(`/institutes/${id}`);
 }

@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Tabs, Tab, Card, CardContent, Grid, TextField,
-  Button, Switch, FormControlLabel, Alert, Snackbar, LinearProgress,
-  Divider, InputAdornment, MenuItem,
+  Button, Alert, Snackbar, LinearProgress,
+  Divider, InputAdornment,
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
-import { getSettings, updateSettings, type InstituteSettings, type UpdateInstituteSettingsRequest } from '../../api/settings.api';
+import { getSettings, updateSettings, type UpdateInstituteSettingsRequest } from '../../api/settings.api';
+import LocationSelector from '../../components/location/LocationSelector';
+import { PageHeader } from '../../components/common/PageHeader/PageHeader';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -41,21 +43,12 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setForm({
-        academicYear: settings.academicYear || '',
         attendanceThresholdPercentage: settings.attendanceThresholdPercentage,
         passMarksPercentage: settings.passMarksPercentage,
-        maxGraceMarks: settings.maxGraceMarks,
-        autoLockAttendanceAfterDays: settings.autoLockAttendanceAfterDays,
-        attendanceLockDays: settings.attendanceLockDays,
-        autoLockPracticalAfterDays: settings.autoLockPracticalAfterDays,
-        practicalLockDays: settings.practicalLockDays,
-        auditLogRetentionDays: settings.auditLogRetentionDays,
-        enableNotifications: settings.enableNotifications,
-        notificationEmail: settings.notificationEmail || '',
         academicSessionFormat: settings.academicSessionFormat || '',
-        maxStudentsPerBatch: settings.maxStudentsPerBatch,
         address: settings.address || '',
         city: settings.city || '',
+        district: settings.district || '',
         state: settings.state || '',
         phone: settings.phone || '',
         email: settings.email || '',
@@ -78,7 +71,7 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <Box>
-        <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>Settings</Typography>
+        <PageHeader title="Settings" />
         <LinearProgress />
       </Box>
     );
@@ -86,17 +79,18 @@ export default function SettingsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>Settings</Typography>
-        <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={mutation.isPending}>
-          {mutation.isPending ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </Box>
+      <PageHeader
+        title="Settings"
+        actions={
+          <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Saving...' : 'Save Changes'}
+          </Button>
+        }
+      />
 
       <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ mb: 2 }}>
         <Tab label="Institute Profile" />
         <Tab label="Academic Settings" />
-        <Tab label="System Settings" />
       </Tabs>
 
       {mutation.isError && <Alert severity="error" sx={{ mb: 2 }}>Failed to save settings</Alert>}
@@ -107,9 +101,6 @@ export default function SettingsPage() {
             <Typography variant="h6" gutterBottom>Institute Profile</Typography>
             <Divider sx={{ mb: 3 }} />
             <Grid container spacing={3}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="Institute Name" value={settings?.academicYear || ''} disabled helperText="Set from Institute management" />
-              </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
                 <TextField fullWidth label="Principal Name" value={form.principalName || ''} onChange={(e) => updateField('principalName', e.target.value)} />
               </Grid>
@@ -131,11 +122,17 @@ export default function SettingsPage() {
               <Grid size={12}>
                 <TextField fullWidth label="Address" multiline rows={2} value={form.address || ''} onChange={(e) => updateField('address', e.target.value)} />
               </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="City" value={form.city || ''} onChange={(e) => updateField('city', e.target.value)} />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="State" value={form.state || ''} onChange={(e) => updateField('state', e.target.value)} />
+              <Grid size={12}>
+                <LocationSelector
+                  state={form.state || ''}
+                  district={form.district || ''}
+                  city={form.city || ''}
+                  pinCode=""
+                  onStateChange={(v) => updateField('state', v)}
+                  onDistrictChange={(v) => updateField('district', v)}
+                  onCityChange={(v) => updateField('city', v)}
+                  onPinChange={() => {}}
+                />
               </Grid>
             </Grid>
           </CardContent>
@@ -149,71 +146,22 @@ export default function SettingsPage() {
             <Divider sx={{ mb: 3 }} />
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="Academic Year" value={form.academicYear || ''} onChange={(e) => updateField('academicYear', e.target.value)} placeholder="e.g. 2025-26" />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField fullWidth label="Session Format" value={form.academicSessionFormat || ''} onChange={(e) => updateField('academicSessionFormat', e.target.value)} placeholder="YYYY-YY" />
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
-                <TextField fullWidth label="Attendance Threshold %" type="number" value={form.attendanceThresholdPercentage ?? 75} onChange={(e) => updateField('attendanceThresholdPercentage', parseInt(e.target.value) || 0)} InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }} />
+                <TextField fullWidth label="Attendance Threshold %" type="text" inputMode="numeric" value={form.attendanceThresholdPercentage ?? 75} onChange={(e) => updateField('attendanceThresholdPercentage', parseInt(e.target.value) || 0)} slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }, htmlInput: { pattern: '[0-9]*' } }} />
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
-                <TextField fullWidth label="Pass Marks %" type="number" value={form.passMarksPercentage ?? 40} onChange={(e) => updateField('passMarksPercentage', parseInt(e.target.value) || 0)} InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }} />
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <TextField fullWidth label="Max Grace Marks" type="number" value={form.maxGraceMarks ?? 5} onChange={(e) => updateField('maxGraceMarks', parseInt(e.target.value) || 0)} />
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <TextField fullWidth label="Max Students Per Batch" type="number" value={form.maxStudentsPerBatch ?? 60} onChange={(e) => updateField('maxStudentsPerBatch', parseInt(e.target.value) || 0)} />
+                <TextField fullWidth label="Pass Marks %" type="text" inputMode="numeric" value={form.passMarksPercentage ?? 40} onChange={(e) => updateField('passMarksPercentage', parseInt(e.target.value) || 0)} slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }, htmlInput: { pattern: '[0-9]*' } }} />
               </Grid>
             </Grid>
-          </CardContent>
-        </Card>
-      </TabPanel>
 
-      <TabPanel value={tabValue} index={2}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>System Settings</Typography>
-            <Divider sx={{ mb: 3 }} />
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControlLabel
-                  control={<Switch checked={form.autoLockAttendanceAfterDays ?? true} onChange={(e) => updateField('autoLockAttendanceAfterDays', e.target.checked)} />}
-                  label="Auto-lock Attendance"
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 4, display: 'block' }}>
-                  Automatically lock attendance records after a set number of days
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="Attendance Lock After (Days)" type="number" value={form.attendanceLockDays ?? 7} onChange={(e) => updateField('attendanceLockDays', parseInt(e.target.value) || 0)} disabled={!form.autoLockAttendanceAfterDays} />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControlLabel
-                  control={<Switch checked={form.autoLockPracticalAfterDays ?? true} onChange={(e) => updateField('autoLockPracticalAfterDays', e.target.checked)} />}
-                  label="Auto-lock Practicals"
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 4, display: 'block' }}>
-                  Automatically lock practical records after a set number of days
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="Practical Lock After (Days)" type="number" value={form.practicalLockDays ?? 30} onChange={(e) => updateField('practicalLockDays', parseInt(e.target.value) || 0)} disabled={!form.autoLockPracticalAfterDays} />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="Audit Log Retention (Days)" type="number" value={form.auditLogRetentionDays ?? 365} onChange={(e) => updateField('auditLogRetentionDays', parseInt(e.target.value) || 0)} />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControlLabel
-                  control={<Switch checked={form.enableNotifications ?? true} onChange={(e) => updateField('enableNotifications', e.target.checked)} />}
-                  label="Enable Notifications"
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField fullWidth label="Notification Email" type="email" value={form.notificationEmail || ''} onChange={(e) => updateField('notificationEmail', e.target.value)} disabled={!form.enableNotifications} />
-              </Grid>
-            </Grid>
+            <Divider sx={{ my: 4 }} />
+
+            <Typography variant="h6" gutterBottom>Notifications</Typography>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Notification settings will be available in a future release.
+            </Alert>
           </CardContent>
         </Card>
       </TabPanel>

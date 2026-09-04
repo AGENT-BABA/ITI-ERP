@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTheme } from '@mui/material/styles';
 import {
   Box,
   Button,
@@ -10,6 +11,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Stack,
   TextField,
   Typography,
   Alert,
@@ -22,24 +24,39 @@ import {
   markAttendance,
   lockAttendance,
 } from '../../api/attendance.api';
+import { useAuth } from '../../hooks/useAuth';
+import { getHolidays } from '../../api/holiday.api';
+import { PageHeader } from '../../components/common/PageHeader/PageHeader';
 
-const ATTENDANCE_STATUS_LABELS: Record<number, { label: string; color: 'success' | 'error' | 'warning' | 'info' | 'default' }> = {
-  0: { label: 'Present', color: 'success' },
-  1: { label: 'Absent', color: 'error' },
-  2: { label: 'Late', color: 'warning' },
-  3: { label: 'CL', color: 'info' },
-  4: { label: 'EL', color: 'info' },
-  5: { label: 'ML', color: 'info' },
-  6: { label: 'HO', color: 'default' },
-};
+const STATUS_CHIPS: { value: number; label: string; short: string; color: string; hoverBg: string; hoverBgDark: string; border: string }[] = [
+  { value: 0, label: 'Present', short: 'P', color: '#fff', hoverBg: '#c8e6c9', hoverBgDark: 'rgba(46,125,50,0.25)', border: '#2e7d32' },
+  { value: 1, label: 'Absent', short: 'A', color: '#fff', hoverBg: '#ffcdd2', hoverBgDark: 'rgba(211,47,47,0.25)', border: '#d32f2f' },
+  { value: 2, label: 'Late', short: 'L', color: '#fff', hoverBg: '#ffe0b2', hoverBgDark: 'rgba(237,108,2,0.25)', border: '#ed6c02' },
+  { value: 3, label: 'CL', short: 'CL', color: '#fff', hoverBg: '#b2dfdb', hoverBgDark: 'rgba(0,137,123,0.25)', border: '#00897b' },
+  { value: 4, label: 'EL', short: 'EL', color: '#fff', hoverBg: '#e1bee7', hoverBgDark: 'rgba(123,31,162,0.25)', border: '#7b1fa2' },
+  { value: 5, label: 'ML', short: 'ML', color: '#fff', hoverBg: '#d7ccc8', hoverBgDark: 'rgba(141,110,99,0.25)', border: '#8d6e63' },
+  { value: 6, label: 'HO', short: 'HO', color: '#fff', hoverBg: '#e0e0e0', hoverBgDark: 'rgba(117,117,117,0.25)', border: '#757575' },
+];
+
+const STATUS_MAP = Object.fromEntries(STATUS_CHIPS.map(s => [s.value, s]));
 
 export default function AttendanceMarkPage() {
   const queryClient = useQueryClient();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const { user } = useAuth();
+  const isTradeHead = user?.role === 'TradeHead';
+  const userTradeId = user?.tradeId ?? '';
   const [selectedTrade, setSelectedTrade] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [studentStatuses, setStudentStatuses] = useState<Record<string, number>>({});
-  const [studentRemarks, setStudentRemarks] = useState<Record<string, string>>({});
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+
+  useEffect(() => {
+    if (isTradeHead && userTradeId) {
+      setSelectedTrade(userTradeId);
+    }
+  }, [isTradeHead, userTradeId]);
 
   const { data: trades } = useQuery({
     queryKey: ['trades'],
@@ -51,6 +68,22 @@ export default function AttendanceMarkPage() {
     queryFn: () => getAttendanceByDate(selectedTrade, selectedDate),
     enabled: !!selectedTrade && !!selectedDate,
   });
+
+  const { data: holidayData } = useQuery({
+    queryKey: ['holiday-check', selectedDate],
+    queryFn: () => getHolidays(selectedDate, selectedDate),
+    enabled: !!selectedDate,
+  });
+
+  const isHolidayDate = holidayData && holidayData.length > 0;
+  const holidayName = holidayData?.[0]?.name || 'Holiday';
+
+  useEffect(() => {
+    if (!attendance) return;
+    const init: Record<string, number> = {};
+    for (const a of attendance) init[a.studentId] = a.status;
+    setStudentStatuses(init);
+  }, [attendance]);
 
   const markMutation = useMutation({
     mutationFn: markAttendance,
@@ -74,90 +107,68 @@ export default function AttendanceMarkPage() {
     },
   });
 
-  const handleStatusChange = (studentId: string, status: number) => {
-    setStudentStatuses((prev) => ({ ...prev, [studentId]: status }));
-  };
-
-  const handleRemarksChange = (studentId: string, remarks: string) => {
-    setStudentRemarks((prev) => ({ ...prev, [studentId]: remarks }));
-  };
-
   const handleSave = () => {
     if (!selectedTrade) return;
-
     const students = Object.entries(studentStatuses).map(([studentId, status]) => ({
       studentId,
       status,
-      remarks: studentRemarks[studentId] || undefined,
     }));
-
-    markMutation.mutate({
-      tradeId: selectedTrade,
-      date: selectedDate,
-      students,
-    });
+    markMutation.mutate({ tradeId: selectedTrade, date: selectedDate, students });
   };
 
   const isLocked = attendance?.some((a) => a.isLocked);
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 600, mb: 3 }}>
-        Mark Attendance
-      </Typography>
+      <PageHeader title="Mark Attendance" />
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Trade</InputLabel>
-          <Select
-            value={selectedTrade}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+        {!isTradeHead ? (
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>Trade</InputLabel>
+            <Select value={selectedTrade} label="Trade" onChange={(e) => setSelectedTrade(e.target.value)}>
+              {trades?.items?.map((trade) => (
+                <MenuItem key={trade.id} value={trade.id}>{trade.code} - {trade.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        ) : (
+          <TextField
             label="Trade"
-            onChange={(e) => setSelectedTrade(e.target.value)}
-          >
-            {trades?.items?.map((trade) => (
-              <MenuItem key={trade.id} value={trade.id}>
-                {trade.code} - {trade.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+            value={trades?.items?.find((t) => t.id === userTradeId)
+              ? `${trades.items.find((t) => t.id === userTradeId)!.code} - ${trades.items.find((t) => t.id === userTradeId)!.name}`
+              : 'Loading...'}
+            slotProps={{ input: { readOnly: true } }}
+            sx={{ minWidth: 200 }}
+          />
+        )}
 
         <TextField
           type="date"
           label="Date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+          slotProps={{ inputLabel: { shrink: true } }}
           sx={{ minWidth: 200 }}
         />
-      </Box>
+      </Stack>
 
       {selectedTrade && selectedDate && (
         <Card>
           <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2, justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'center' } }}>
               <Typography variant="h6">
                 Attendance for {new Date(selectedDate).toLocaleDateString()}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  onClick={handleSave}
-                  disabled={isLocked || markMutation.isPending}
-                >
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={isLocked || markMutation.isPending}>
                   Save
                 </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<LockIcon />}
-                  onClick={() => lockMutation.mutate()}
-                  disabled={isLocked || lockMutation.isPending}
-                >
+                <Button variant="outlined" startIcon={<LockIcon />} onClick={() => lockMutation.mutate()} disabled={isLocked || lockMutation.isPending}>
                   Lock
                 </Button>
-              </Box>
-            </Box>
+              </Stack>
+            </Stack>
 
             {isLocked && (
               <Alert severity="info" sx={{ mb: 2 }}>
@@ -165,57 +176,68 @@ export default function AttendanceMarkPage() {
               </Alert>
             )}
 
+            {isHolidayDate && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                This date is a holiday: <strong>{holidayName}</strong>. All students are marked as HO.
+              </Alert>
+            )}
+
             {loadingAttendance ? (
               <Typography>Loading students...</Typography>
             ) : attendance && attendance.length > 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {attendance.map((record) => (
-                  <Box
-                    key={record.studentId}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      p: 1,
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Typography sx={{ minWidth: 80, fontWeight: 600 }}>
-                      {record.rollNumber}
-                    </Typography>
-                    <Typography sx={{ minWidth: 200 }}>
-                      {record.studentName}
-                    </Typography>
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' }, gap: 1.5 }}>
+                {attendance.map((record) => {
+                  const currentStatus = studentStatuses[record.studentId] ?? record.status;
+                  const chip = STATUS_MAP[currentStatus];
+                  return (
+                    <Box
+                      key={record.studentId}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        p: 1,
+                        border: '1px solid',
+                        borderColor: chip?.border ?? '#ccc',
+                        borderRadius: 1,
+                        bgcolor: isDark ? (chip?.hoverBgDark ?? 'rgba(255,255,255,0.08)') : (chip?.hoverBg ?? '#fafafa'),
+                      }}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 600, fontSize: '0.8rem', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {record.studentName}
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.2 }}>
+                          {record.rollNumber}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={chip?.short ?? '?'}
+                        size="small"
+                        sx={{
+                          height: 22,
+                          minWidth: 28,
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          bgcolor: chip?.border ?? '#ccc',
+                          color: '#fff',
+                          borderRadius: '4px',
+                        }}
+                      />
                       <Select
-                        value={studentStatuses[record.studentId] ?? record.status}
-                        onChange={(e) => handleStatusChange(record.studentId, e.target.value as number)}
+                        size="small"
+                        value={currentStatus}
+                        onChange={(e) => setStudentStatuses(prev => ({ ...prev, [record.studentId]: e.target.value as number }))}
                         disabled={isLocked}
+                        sx={{ minWidth: 90, fontSize: '0.8rem', height: 30 }}
                       >
-                        {Object.entries(ATTENDANCE_STATUS_LABELS).map(([value, { label }]) => (
-                          <MenuItem key={value} value={value}>
-                            {label}
-                          </MenuItem>
+                        {STATUS_CHIPS.map((s) => (
+                          <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
                         ))}
                       </Select>
-                    </FormControl>
-                    <Chip
-                      label={ATTENDANCE_STATUS_LABELS[record.status]?.label || 'Unknown'}
-                      color={ATTENDANCE_STATUS_LABELS[record.status]?.color || 'default'}
-                      size="small"
-                    />
-                    <TextField
-                      size="small"
-                      placeholder="Remarks"
-                      value={studentRemarks[record.studentId] ?? record.remarks ?? ''}
-                      onChange={(e) => handleRemarksChange(record.studentId, e.target.value)}
-                      disabled={isLocked}
-                      sx={{ flex: 1 }}
-                    />
-                  </Box>
-                ))}
+                    </Box>
+                  );
+                })}
               </Box>
             ) : (
               <Typography color="text.secondary">
@@ -226,11 +248,7 @@ export default function AttendanceMarkPage() {
         </Card>
       )}
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-      >
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
           {snackbar.message}
         </Alert>

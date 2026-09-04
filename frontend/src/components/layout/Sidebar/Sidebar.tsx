@@ -12,20 +12,22 @@ import {
   Box,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import BusinessIcon from '@mui/icons-material/Business';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import BuildIcon from '@mui/icons-material/Build';
 import PeopleIcon from '@mui/icons-material/People';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SchoolIcon from '@mui/icons-material/School';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
-import EventNoteIcon from '@mui/icons-material/EventNote';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import SummarizeIcon from '@mui/icons-material/Summarize';
 import SettingsIcon from '@mui/icons-material/Settings';
 
 interface SidebarProps {
   drawerWidth: number;
+  isMobile: boolean;
+  open: boolean;
+  onClose: () => void;
 }
 
 interface NavItem {
@@ -36,12 +38,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
-  { label: 'Institute', path: '/institutes', icon: <BusinessIcon /> },
+  { label: 'Institute', path: '/institutes', icon: <BusinessCenterIcon /> },
   { label: 'Academic Sessions', path: '/academic-sessions', icon: <CalendarMonthIcon /> },
   { label: 'Trades', path: '/trades', icon: <BuildIcon /> },
   { label: 'Students', path: '/students', icon: <SchoolIcon /> },
   { label: 'Mark Attendance', path: '/attendance/mark', icon: <FingerprintIcon /> },
-  { label: 'Attendance Report', path: '/attendance/report', icon: <EventNoteIcon /> },
   { label: 'Practicals', path: '/practicals', icon: <AutoGraphIcon /> },
   { label: 'Yearly Practicals', path: '/yearly-practicals', icon: <AutoGraphIcon /> },
   { label: 'Reports', path: '/reports/institute-summary', icon: <SummarizeIcon /> },
@@ -50,25 +51,20 @@ const navItems: NavItem[] = [
   { label: 'Audit Logs', path: '/audit-logs', icon: <AssessmentIcon /> },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ drawerWidth, isMobile, open, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-        },
-      }}
-    >
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    if (isMobile) onClose();
+  };
+
+  const drawerContent = (
+    <>
       <Toolbar>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <BusinessIcon color="primary" />
+          <Box component="img" src="/ITI_Logo.jpg" alt="ITI Logo" sx={{ height: 32, width: 32, objectFit: 'contain', borderRadius: 0.5 }} />
           <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
             ITI ERP
           </Typography>
@@ -81,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 selected={isActive}
-                onClick={() => navigate(item.path)}
+                onClick={() => handleNavClick(item.path)}
                 sx={{
                   borderRadius: 1,
                   '&.Mui-selected': {
@@ -103,6 +99,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ drawerWidth }) => {
           );
         })}
       </List>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer
+        variant="temporary"
+        open={open}
+        onClose={onClose}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+    );
+  }
+
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: drawerWidth,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: drawerWidth,
+          boxSizing: 'border-box',
+        },
+      }}
+    >
+      {drawerContent}
     </Drawer>
   );
 };

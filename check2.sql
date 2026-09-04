@@ -1,0 +1,1 @@
+SELECT count(*) as users FROM "Users"; SELECT count(*) as institutes FROM "Institutes"; SELECT count(*) as roles FROM "Roles"; SELECT count(*) as sessions FROM "AcademicSessions"; SELECT count(*) as permissions FROM "Permissions";

@@ -3,22 +3,15 @@ import axiosClient from './axiosClient';
 export interface InstituteSettings {
   id: string;
   instituteId: string;
-  academicYear?: string;
+  academicSessionFormat?: string;
   attendanceThresholdPercentage: number;
   passMarksPercentage: number;
-  maxGraceMarks: number;
-  autoLockAttendanceAfterDays: boolean;
-  attendanceLockDays: number;
-  autoLockPracticalAfterDays: boolean;
-  practicalLockDays: number;
-  auditLogRetentionDays: number;
   enableNotifications: boolean;
   notificationEmail?: string;
-  academicSessionFormat?: string;
-  maxStudentsPerBatch: number;
   logoPath?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   phone?: string;
   email?: string;
@@ -31,22 +24,15 @@ export interface InstituteSettings {
 }
 
 export interface UpdateInstituteSettingsRequest {
-  academicYear?: string;
+  academicSessionFormat?: string;
   attendanceThresholdPercentage?: number;
   passMarksPercentage?: number;
-  maxGraceMarks?: number;
-  autoLockAttendanceAfterDays?: boolean;
-  attendanceLockDays?: number;
-  autoLockPracticalAfterDays?: boolean;
-  practicalLockDays?: number;
-  auditLogRetentionDays?: number;
   enableNotifications?: boolean;
   notificationEmail?: string;
-  academicSessionFormat?: string;
-  maxStudentsPerBatch?: number;
   logoPath?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   phone?: string;
   email?: string;

@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: iti-erp-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: iti-erp-api
+    ports:
+      - "5000:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - JwtSettings__Secret=${JwtSettings__Secret}
+      - SeedAdmin__Password=${SeedAdmin__Password}
+    volumes:
+      - file-storage:/data/files
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        - VITE_API_BASE_URL=http://localhost:5000/api/v1
+    container_name: iti-erp-frontend
+    ports:
+      - "3000:8080"
+    depends_on:
+      - api
+    volumes:
+      - frontend-dist:/usr/share/nginx/html
+
+volumes:
+  pgdata:
+  file-storage:
+  frontend-dist:

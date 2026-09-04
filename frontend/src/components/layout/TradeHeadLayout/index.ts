@@ -1,0 +1,1 @@
+export { TradeHeadLayout } from './TradeHeadLayout';

@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
 import { AuthProvider } from './providers/AuthProvider';
+import { ColorModeProvider } from './providers/ColorModeContext';
 import ThemeProvider from './providers/ThemeProvider';
 import AppRouter from './routes';
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
@@ -20,11 +21,13 @@ export default function App() {
         maxSnack={3}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <ThemeProvider>
-          <AuthProvider>
-            <AppRouter />
-          </AuthProvider>
-        </ThemeProvider>
+        <ColorModeProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <AppRouter />
+            </AuthProvider>
+          </ThemeProvider>
+        </ColorModeProvider>
       </SnackbarProvider>
     </QueryClientProvider>
   );

@@ -1,0 +1,28 @@
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY ["src/API/ITI.ERP.Api/ITI.ERP.Api.csproj", "src/API/ITI.ERP.Api/"]
+COPY ["src/Infrastructure/ITI.ERP.Infrastructure/ITI.ERP.Infrastructure.csproj", "src/Infrastructure/ITI.ERP.Infrastructure/"]
+COPY ["src/Application/ITI.ERP.Application/ITI.ERP.Application.csproj", "src/Application/ITI.ERP.Application/"]
+COPY ["src/Domain/ITI.ERP.Domain/ITI.ERP.Domain.csproj", "src/Domain/ITI.ERP.Domain/"]
+COPY ["src/Shared/ITI.ERP.Shared/ITI.ERP.Shared.csproj", "src/Shared/ITI.ERP.Shared/"]
+RUN dotnet restore "src/API/ITI.ERP.Api/ITI.ERP.Api.csproj"
+
+COPY src/ src/
+RUN dotnet publish "src/API/ITI.ERP.Api/ITI.ERP.Api.csproj" -c Release -o /app/publish --no-restore
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --ingroup appgroup appuser
+
+WORKDIR /app
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:8080
+
+COPY --from=build --chown=appuser:appgroup /app/publish .
+
+USER appuser
+
+ENTRYPOINT ["dotnet", "ITI.ERP.Api.dll"]

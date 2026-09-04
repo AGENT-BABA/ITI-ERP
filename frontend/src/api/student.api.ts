@@ -12,6 +12,7 @@ export interface CreateStudentRequest {
   email?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   pinCode?: string;
   fatherName?: string;
@@ -19,6 +20,7 @@ export interface CreateStudentRequest {
   guardianPhone?: string;
   guardianRelation?: string;
   tradeId: string;
+  batchId?: string;
   rollNumber: string;
   admissionNumber: string;
   admissionDate: string;
@@ -45,6 +47,7 @@ export interface UpdateStudentRequest {
   email?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
   pinCode?: string;
   fatherName?: string;
@@ -52,6 +55,7 @@ export interface UpdateStudentRequest {
   guardianPhone?: string;
   guardianRelation?: string;
   tradeId?: string;
+  batchId?: string;
   rollNumber?: string;
   admissionNumber?: string;
   admissionDate?: string;
@@ -99,10 +103,18 @@ export async function archiveStudent(id: string, reason: string): Promise<void> 
   await axiosClient.put(`/students/${id}/archive?reason=${encodeURIComponent(reason)}`);
 }
 
+export async function deleteStudent(id: string): Promise<void> {
+  await axiosClient.delete(`/students/${id}`);
+}
+
 export async function uploadStudentPhoto(id: string, file: File): Promise<void> {
   const formData = new FormData();
   formData.append('file', file);
   await axiosClient.post(`/students/${id}/photo`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+}
+
+export async function changeStudentBatch(id: string, data: { newBatchId: string; reason: string }): Promise<void> {
+  await axiosClient.put(`/students/${id}/batch`, data);
 }

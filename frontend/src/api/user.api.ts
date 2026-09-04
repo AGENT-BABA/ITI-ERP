@@ -1,5 +1,5 @@
 import axiosClient from './axiosClient';
-import type{ PaginatedResponse, PaginationRequest, User } from '../types/common.types';
+import type { PaginatedResponse, PaginationRequest, User, Role } from '../types/common.types';
 
 export interface CreateUserRequest {
   username: string;
@@ -8,23 +8,23 @@ export interface CreateUserRequest {
   lastName?: string;
   phone?: string;
   password: string;
-  roles: string[];
-  isActive: boolean;
+  roleIds: string[];
+  instituteId?: string;
+  tradeId?: string;
+  batchId?: string;
 }
 
 export interface UpdateUserRequest {
-  email?: string;
+  email?: string | null;
   firstName?: string;
-  lastName?: string;
-  phone?: string;
-  roles?: string[];
-  isActive?: boolean;
+  lastName?: string | null;
+  phone?: string | null;
+  roleIds?: string[];
+  tradeId?: string | null;
 }
 
-export interface ChangePasswordRequest {
-  currentPassword: string;
+export interface ResetPasswordRequest {
   newPassword: string;
-  confirmPassword: string;
 }
 
 export async function getUsers(params: PaginationRequest): Promise<PaginatedResponse<User>> {
@@ -47,10 +47,41 @@ export async function updateUser(id: string, data: UpdateUserRequest): Promise<U
   return response.data;
 }
 
+export async function toggleUserStatus(id: string): Promise<void> {
+  await axiosClient.put(`/users/${id}/toggle-status`);
+}
+
+export async function resetPassword(id: string, data: ResetPasswordRequest): Promise<void> {
+  await axiosClient.post(`/users/${id}/reset-password`, data);
+}
+
+export async function unlockUser(id: string): Promise<void> {
+  await axiosClient.post(`/users/${id}/unlock`);
+}
+
 export async function deleteUser(id: string): Promise<void> {
   await axiosClient.delete(`/users/${id}`);
 }
 
-export async function changePassword(id: string, data: ChangePasswordRequest): Promise<void> {
-  await axiosClient.post(`/users/${id}/change-password`, data);
+export async function getRoles(): Promise<Role[]> {
+  const response = await axiosClient.get<Role[]>('/roles');
+  return response.data;
+}
+
+export interface TradeHeadDto {
+  userId: string;
+  username: string;
+  email?: string;
+  firstName: string;
+  lastName?: string;
+  isActive: boolean;
+  isLocked: boolean;
+  tradeId: string;
+  tradeName: string;
+  tradeCode: string;
+}
+
+export async function getTradeHeadsByInstitute(instituteId: string): Promise<TradeHeadDto[]> {
+  const response = await axiosClient.get<TradeHeadDto[]>(`/users/tradeheads/${instituteId}`);
+  return response.data;
 }

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -8,14 +8,24 @@ import {
   IconButton,
   Tooltip,
   Typography,
+  Autocomplete,
+  TextField,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
+  Delete as DeleteIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../components/common/DataTable/DataTable';
-import { getStudents } from '../../api/student.api';
+import { PageHeader } from '../../components/common/PageHeader/PageHeader';
+import { ConfirmDialog } from '../../components/common/ConfirmDialog';
+import { StudentImportDialog } from '../../components/student/StudentImportDialog';
+import { getStudents, deleteStudent } from '../../api/student.api';
+import { getTrades } from '../../api/trade.api';
+import { getInstituteById } from '../../api/institute.api';
+import { useAuth } from '../../hooks/useAuth';
 import type { Student } from '../../types/common.types';
 
 const STATUS_LABELS: Record<number, { label: string; color: 'success' | 'warning' | 'error' | 'info' | 'default' }> = {
@@ -36,12 +46,39 @@ const GENDER_LABELS: Record<number, string> = {
 
 export default function StudentListPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const { user, hasPermission } = useAuth();
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+
+  const isTradeHeadView = location.pathname.startsWith('/my-students');
+  const isTradeHead = user?.role === 'TradeHead';
+  const isInstituteAdmin = user?.role === 'InstituteAdmin';
+
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [selectedTradeId, setSelectedTradeId] = useState<string>(isTradeHead ? (user?.tradeId ?? '') : '');
+  const [selectedTradeName, setSelectedTradeName] = useState('');
+
+  const { data: tradesData } = useQuery({
+    queryKey: ['trades'],
+    queryFn: () => getTrades({ pageNumber: 1, pageSize: 200 }),
+    enabled: isInstituteAdmin || isTradeHead,
+  });
+
+  const { data: currentInstitute } = useQuery({
+    queryKey: ['institute', user?.instituteId],
+    queryFn: () => getInstituteById(user!.instituteId!),
+    enabled: isInstituteAdmin && !!user?.instituteId,
+  });
+
+  const availableTrades = tradesData?.items ?? [];
+  const isTradeHeadWithTrade = isTradeHead && !!user?.tradeId;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['students', page, pageSize, searchTerm],
+    queryKey: ['students', user?.id, user?.tradeId, page, pageSize, searchTerm],
     queryFn: () =>
       getStudents({
         pageNumber: page + 1,
@@ -50,14 +87,31 @@ export default function StudentListPage() {
       }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteStudent,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setDeleteTarget(null);
+    },
+    onError: () => {
+      setDeleteTarget(null);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+    },
+  });
+
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
   }, []);
 
-  const handleRowsPerPageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setPageSize(parseInt(event.target.value, 10));
-    setPage(0);
-  }, []);
+  const handleDeleteConfirm = () => {
+    if (deleteTarget) {
+      deleteMutation.mutate(deleteTarget.id);
+    }
+  };
+
+  const detailPath = isTradeHeadView ? '/my-students' : '/students';
 
   const columns: Column<Student>[] = [
     { id: 'rollNumber', label: 'Roll No.', sortable: true },
@@ -68,6 +122,7 @@ export default function StudentListPage() {
       render: (row) => `${row.firstName} ${row.middleName ? row.middleName + ' ' : ''}${row.lastName}`,
     },
     { id: 'tradeCode', label: 'Trade', render: (row) => `${row.tradeCode || '-'} - ${row.tradeName || '-'}` },
+    { id: 'batchName', label: 'Batch', render: (row) => row.batchName || '-' },
     { id: 'admissionNumber', label: 'Admission No.' },
     { id: 'gender', label: 'Gender', render: (row) => GENDER_LABELS[row.gender] || '-' },
     {
@@ -84,15 +139,24 @@ export default function StudentListPage() {
       render: (row) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <Tooltip title="View">
-            <IconButton size="small" onClick={() => navigate(`/students/${row.id}`)}>
+            <IconButton size="small" onClick={() => navigate(`${detailPath}/${row.id}`)}>
               <ViewIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => navigate(`/students/${row.id}/edit`)}>
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {hasPermission('Student.Edit') && (
+            <Tooltip title="Edit">
+              <IconButton size="small" onClick={() => navigate(`/students/${row.id}/edit`)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {hasPermission('Student.Delete') && (
+            <Tooltip title="Delete">
+              <IconButton size="small" color="error" onClick={() => setDeleteTarget(row)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       ),
     },
@@ -100,18 +164,44 @@ export default function StudentListPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Students
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/students/new')}
-        >
-          Add Student
-        </Button>
-      </Box>
+      <PageHeader
+        title={isTradeHeadView ? 'My Students' : 'Students'}
+        actions={
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {isInstituteAdmin && (
+              <Autocomplete
+                options={availableTrades}
+                getOptionLabel={(option) => `${option.code} - ${option.name}`}
+                value={availableTrades.find((t) => t.id === selectedTradeId) || null}
+                onChange={(_, newValue) => {
+                  setSelectedTradeId(newValue?.id ?? '');
+                  setSelectedTradeName(newValue?.name ?? '');
+                }}
+                sx={{ minWidth: 250 }}
+                renderInput={(params) => <TextField {...params} label="Select Trade to Import" size="small" />}
+              />
+            )}
+            {(isTradeHeadWithTrade || (isInstituteAdmin && selectedTradeId)) && hasPermission('Student.Import') && (
+              <Button
+                variant="outlined"
+                startIcon={<UploadIcon />}
+                onClick={() => setImportDialogOpen(true)}
+              >
+                Import Students
+              </Button>
+            )}
+            {hasPermission('Student.Create') && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/students/new')}
+              >
+                Add Student
+              </Button>
+            )}
+          </Box>
+        }
+      />
 
       <DataTable
         columns={columns}
@@ -138,6 +228,30 @@ export default function StudentListPage() {
           </Typography>
         </Box>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Student"
+        message={`Are you sure you want to delete ${deleteTarget?.firstName} ${deleteTarget?.lastName}? This action cannot be undone.`}
+        confirmText="Delete"
+        severity="error"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setDeleteTarget(null)}
+      />
+
+      <StudentImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImportComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['students'] });
+          setImportDialogOpen(false);
+        }}
+        tradeId={isTradeHead ? (user?.tradeId ?? '') : selectedTradeId}
+        tradeName={isTradeHead ? 'Your Trade' : selectedTradeName}
+        instituteName={currentInstitute?.name ?? 'Institute'}
+        sessionYear="Current Session"
+        isTradeHead={isTradeHead}
+      />
     </Box>
   );
 }

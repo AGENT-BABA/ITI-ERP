@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { getToken, setToken, removeToken, getRefreshToken, setRefreshToken, removeRefreshToken } from '../utils/tokenUtils';
+import { getToken, setToken, removeToken, getRefreshToken, setRefreshToken, removeRefreshToken, getAcademicSessionIdFromToken } from '../utils/tokenUtils';
 import { refreshToken as callRefreshToken } from './auth.api';
 
 const axiosClient = axios.create({
@@ -68,14 +68,27 @@ axiosClient.interceptors.response.use(
       }
 
       try {
+        const currentToken = getToken();
+        const currentSessionId = currentToken ? getAcademicSessionIdFromToken(currentToken) : undefined;
         const response = await callRefreshToken({
           refreshToken: currentRefreshToken,
+          academicSessionId: currentSessionId,
         });
-        const newToken = response.token;
+        const newToken = response.accessToken;
         setToken(newToken);
         if (response.refreshToken) {
           setRefreshToken(response.refreshToken);
         }
+
+        // Update user state in localStorage with new session
+        try {
+          const stored = localStorage.getItem('iti_erp_user');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            parsed.academicSessionId = getAcademicSessionIdFromToken(newToken);
+            localStorage.setItem('iti_erp_user', JSON.stringify(parsed));
+          }
+        } catch { /* ignore */ }
 
         processQueue(null, newToken);
         originalRequest.headers.Authorization = `Bearer ${newToken}`;

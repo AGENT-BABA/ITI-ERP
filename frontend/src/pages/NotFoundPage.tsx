@@ -6,12 +6,14 @@ export default function NotFoundPage() {
 
   return (
     <Box
-      display="flex"
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
-      minHeight="100vh"
-      textAlign="center"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        textAlign: 'center',
+      }}
     >
       <Typography variant="h1" color="primary" sx={{ fontWeight: 700 }}>
         404

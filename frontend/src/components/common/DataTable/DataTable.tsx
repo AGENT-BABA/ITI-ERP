@@ -19,6 +19,7 @@ export interface Column<T> {
   id: string;
   label: string;
   sortable?: boolean;
+  align?: 'left' | 'right' | 'center';
   render?: (row: T) => React.ReactNode;
 }
 
@@ -37,6 +38,7 @@ interface DataTableProps<T> {
   onSort?: (columnId: string, direction: 'asc' | 'desc') => void;
   searchable?: boolean;
   onSearch?: (query: string) => void;
+  emptyMessage?: string;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -48,6 +50,7 @@ export function DataTable<T extends Record<string, any>>({
   onSort,
   searchable = false,
   onSearch,
+  emptyMessage = 'No data found',
 }: DataTableProps<T>) {
   const [sortColumn, setSortColumn] = React.useState<string>('');
   const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
@@ -69,7 +72,7 @@ export function DataTable<T extends Record<string, any>>({
   return (
     <Paper sx={{ width: '100%', overflow: 'hidden' }}>
       {searchable && (
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: 2, pb: 0 }}>
           <TextField
             fullWidth
             size="small"
@@ -80,56 +83,66 @@ export function DataTable<T extends Record<string, any>>({
         </Box>
       )}
 
-      <TableContainer sx={{ maxHeight: 600 }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              {columns.map((col) => (
-                <TableCell key={col.id}>
-                  {col.sortable ? (
-                    <TableSortLabel
-                      active={sortColumn === col.id}
-                      direction={sortColumn === col.id ? sortDirection : 'asc'}
-                      onClick={() => handleSort(col.id)}
-                    >
-                      {col.label}
-                    </TableSortLabel>
-                  ) : (
-                    col.label
-                  )}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
+      <Box sx={{ overflowX: 'auto' }}>
+        <TableContainer sx={{ maxHeight: 600 }}>
+          <Table stickyHeader size="small">
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
-                  <CircularProgress />
-                </TableCell>
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.id}
+                    align={col.align || 'left'}
+                    sx={{ fontWeight: 600, fontSize: 13, bgcolor: 'background.default' }}
+                  >
+                    {col.sortable ? (
+                      <TableSortLabel
+                        active={sortColumn === col.id}
+                        direction={sortColumn === col.id ? sortDirection : 'asc'}
+                        onClick={() => handleSort(col.id)}
+                      >
+                        {col.label}
+                      </TableSortLabel>
+                    ) : (
+                      col.label
+                    )}
+                  </TableCell>
+                ))}
               </TableRow>
-            ) : data.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    No data
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((row, index) => (
-                <TableRow key={index} hover>
-                  {columns.map((col) => (
-                    <TableCell key={col.id}>
-                      {col.render ? col.render(row) : row[col.id]}
-                    </TableCell>
-                  ))}
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
+                    <CircularProgress />
+                  </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {emptyMessage}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((row, index) => (
+                  <TableRow
+                    key={index}
+                    hover
+                    sx={{ '&:last-child td': { borderBottom: 0 } }}
+                  >
+                    {columns.map((col) => (
+                      <TableCell key={col.id} align={col.align || 'left'} sx={{ fontSize: 13 }}>
+                        {col.render ? col.render(row) : row[col.id]}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
 
       {pagination && (
         <TablePagination

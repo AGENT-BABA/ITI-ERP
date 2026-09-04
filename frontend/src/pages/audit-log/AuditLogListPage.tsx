@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Alert } from '@mui/material';
+import { Box, Alert } from '@mui/material';
 import {DataTable, type Column, type PaginationProps } from '../../components/common/DataTable';
 import { getAuditLogs } from '../../api/auditLog.api';
 import type { AuditLog } from '../../types/common.types';
+import { PageHeader } from '../../components/common/PageHeader/PageHeader';
 
 const columns: Column<AuditLog>[] = [
   { id: 'timestamp', label: 'Timestamp', sortable: true },
@@ -43,9 +44,7 @@ export default function AuditLogListPage() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 600, mb: 3 }}>
-        Audit Logs
-      </Typography>
+      <PageHeader title="Audit Logs" />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
