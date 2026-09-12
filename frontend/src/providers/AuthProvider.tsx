@@ -1,6 +1,11 @@
 import { createContext, useCallback, useMemo, useState } from 'react';
 import { login as apiLogin, logout as apiLogout, switchSession as apiSwitchSession } from '../api/auth.api';
-import { setToken, setRefreshToken, clearAuthData, getToken, getPermissionsFromToken, getInstituteIdFromToken, getTradeIdFromToken, getAcademicSessionIdFromToken } from '../utils/tokenUtils';
+import {
+  setToken, setRefreshToken, clearAuthData, getToken,
+  getPermissionsFromToken, getInstituteIdFromToken, getTradeIdFromToken,
+  getAcademicSessionIdFromToken, getSessionYearFromStorage, getInstituteFilterFromStorage,
+  setSessionYearInStorage, setInstituteFilterInStorage,
+} from '../utils/tokenUtils';
 import { queryClient } from '../App';
 
 export interface User {
@@ -13,6 +18,8 @@ export interface User {
   instituteId?: string;
   tradeId?: string;
   academicSessionId?: string;
+  sessionYear?: string;
+  instituteFilterId?: string;
   permissions: string[];
 }
 
@@ -22,6 +29,7 @@ interface AuthContextValue {
   login: (grNumber: string, username: string, password: string) => Promise<boolean>;
   logout: () => void;
   switchSession: (sessionId: string) => Promise<boolean>;
+  switchSessionYear: (year: string, instituteFilterId?: string) => void;
   isSwitchingSession: boolean;
 }
 
@@ -42,6 +50,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           parsed.permissions = getPermissionsFromToken(token);
           parsed.academicSessionId = getAcademicSessionIdFromToken(token);
         }
+        parsed.sessionYear = getSessionYearFromStorage() || undefined;
+        parsed.instituteFilterId = getInstituteFilterFromStorage() || undefined;
         return parsed;
       }
       return null;
@@ -108,6 +118,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
+  const switchSessionYear = useCallback((year: string, instituteFilterId?: string) => {
+    setSessionYearInStorage(year);
+    setInstituteFilterInStorage(instituteFilterId ?? null);
+
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated: User = {
+        ...prev,
+        sessionYear: year,
+        instituteFilterId: instituteFilterId,
+      };
+      localStorage.setItem('iti_erp_user', JSON.stringify(updated));
+      return updated;
+    });
+
+    queryClient.clear();
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       if (getToken()) {
@@ -118,6 +146,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       clearAuthData();
       localStorage.removeItem('iti_erp_user');
+      localStorage.removeItem('iti_erp_session_year');
+      localStorage.removeItem('iti_erp_institute_filter');
       setUser(null);
     }
   }, []);
@@ -129,9 +159,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       switchSession,
+      switchSessionYear,
       isSwitchingSession,
     }),
-    [user, login, logout, switchSession, isSwitchingSession]
+    [user, login, logout, switchSession, switchSessionYear, isSwitchingSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

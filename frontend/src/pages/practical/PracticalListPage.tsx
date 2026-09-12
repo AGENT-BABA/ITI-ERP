@@ -26,7 +26,7 @@ export default function PracticalListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<MonthlyPractical | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -142,6 +142,7 @@ export default function PracticalListPage() {
             : undefined
         }
         onPageChange={(newPage) => setPage(newPage)}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
         searchable
         onSearch={setSearchTerm}
       />

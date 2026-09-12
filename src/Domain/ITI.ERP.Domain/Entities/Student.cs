@@ -44,6 +44,7 @@ public class Student : DraftEntity
     public Guid? StatusChangedBy { get; set; }
     public DateTime? WithdrawalDate { get; set; }
     public string? WithdrawalReason { get; set; }
+    public DateTime? RetentionUntil { get; set; }
 
     public string? AadharNumber { get; set; }
     public string? PhotoPath { get; set; }
@@ -78,8 +79,10 @@ public class Student : DraftEntity
         return Status switch
         {
             StudentStatus.Active => targetStatus is StudentStatus.Inactive or StudentStatus.Transferred
-                or StudentStatus.Withdrawn or StudentStatus.Completed or StudentStatus.CancelledAdmission,
+                or StudentStatus.Withdrawn or StudentStatus.Completed or StudentStatus.CancelledAdmission
+                or StudentStatus.Archived,
             StudentStatus.Inactive => targetStatus is StudentStatus.Active,
+            StudentStatus.Archived => targetStatus is StudentStatus.Active,
             _ => false
         };
     }

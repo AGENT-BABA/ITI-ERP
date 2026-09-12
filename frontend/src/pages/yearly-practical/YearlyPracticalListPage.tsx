@@ -28,7 +28,7 @@ export default function YearlyPracticalListPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('Yearly Practical');
@@ -166,6 +166,7 @@ export default function YearlyPracticalListPage() {
             : undefined
         }
         onPageChange={(newPage) => setPage(newPage)}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
         searchable
         onSearch={setSearchTerm}
       />

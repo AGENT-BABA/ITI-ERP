@@ -21,6 +21,8 @@ public static class BatchMapper
         TradeDurationInMonths = b.Trade?.DurationInMonths,
         StartSessionYear = b.StartAcademicSession?.SessionYear,
         CreatedAt = b.CreatedAt,
-        UpdatedAt = b.UpdatedAt
+        UpdatedAt = b.UpdatedAt,
+        DeletedAt = b.DeletedAt,
+        DeletedBy = b.DeletedBy
     };
 }

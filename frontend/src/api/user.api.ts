@@ -3,7 +3,7 @@ import type { PaginatedResponse, PaginationRequest, User, Role } from '../types/
 
 export interface CreateUserRequest {
   username: string;
-  email?: string;
+  email: string;
   firstName: string;
   lastName?: string;
   phone?: string;
@@ -51,8 +51,8 @@ export async function toggleUserStatus(id: string): Promise<void> {
   await axiosClient.put(`/users/${id}/toggle-status`);
 }
 
-export async function resetPassword(id: string, data: ResetPasswordRequest): Promise<void> {
-  await axiosClient.post(`/users/${id}/reset-password`, data);
+export async function sendPasswordReset(id: string): Promise<void> {
+  await axiosClient.post(`/users/${id}/send-password-reset`);
 }
 
 export async function unlockUser(id: string): Promise<void> {

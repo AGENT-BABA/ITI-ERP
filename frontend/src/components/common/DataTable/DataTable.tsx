@@ -35,6 +35,7 @@ interface DataTableProps<T> {
   loading?: boolean;
   pagination?: PaginationProps;
   onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
   onSort?: (columnId: string, direction: 'asc' | 'desc') => void;
   searchable?: boolean;
   onSearch?: (query: string) => void;
@@ -47,6 +48,7 @@ export function DataTable<T extends Record<string, any>>({
   loading = false,
   pagination,
   onPageChange,
+  onPageSizeChange,
   onSort,
   searchable = false,
   onSearch,
@@ -152,6 +154,7 @@ export function DataTable<T extends Record<string, any>>({
           rowsPerPage={pagination.pageSize}
           rowsPerPageOptions={[10, 25, 50]}
           onPageChange={(_, page) => onPageChange?.(page)}
+          onRowsPerPageChange={(e) => onPageSizeChange?.(parseInt(e.target.value, 10))}
         />
       )}
     </Paper>

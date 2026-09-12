@@ -1,5 +1,7 @@
 using System.IO.Compression;
 using System.Net;
+using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using FluentValidation;
@@ -95,8 +97,11 @@ try
     builder.Services.AddInfrastructure(builder.Configuration);
 
     var jwtSecret = builder.Configuration["JwtSettings:Secret"]
-        ?? Environment.GetEnvironmentVariable("JwtSettings__Secret")
-        ?? throw new InvalidOperationException("JwtSettings:Secret is not configured.");
+    ?? Environment.GetEnvironmentVariable("JwtSettings__Secret")
+    ?? throw new InvalidOperationException("JwtSettings:Secret is not configured. Set it via environment variable or user-secrets.");
+
+    if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
+        throw new InvalidOperationException($"JwtSettings:Secret must be at least 32 characters. Current length: {jwtSecret.Length}");
 
     var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "ITI.ERP.Api";
     var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "ITI.ERP.Client";
@@ -225,7 +230,7 @@ try
             limiterOptions.QueueLimit = 5;
         });
 
-        options.AddFixedWindowLimiter("passwordReset", limiterOptions =>
+        options.AddFixedWindowLimiter("forgotPassword", limiterOptions =>
         {
             limiterOptions.PermitLimit = 5;
             limiterOptions.Window = TimeSpan.FromMinutes(15);
@@ -233,11 +238,80 @@ try
             limiterOptions.QueueLimit = 0;
         });
 
-        options.OnRejected = (context, ct) =>
+        options.AddFixedWindowLimiter("resetPassword", limiterOptions =>
         {
-            Log.Warning("Rate limit exceeded for {Ip}", context.HttpContext.Connection.RemoteIpAddress);
+            limiterOptions.PermitLimit = 5;
+            limiterOptions.Window = TimeSpan.FromMinutes(15);
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = 0;
+        });
+
+        options.AddFixedWindowLimiter("verifyToken", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 10;
+            limiterOptions.Window = TimeSpan.FromMinutes(15);
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = 0;
+        });
+
+        options.AddFixedWindowLimiter("setup", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 3;
+            limiterOptions.Window = TimeSpan.FromHours(1);
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = 0;
+        });
+
+        options.AddFixedWindowLimiter("login", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 10;
+            limiterOptions.Window = TimeSpan.FromMinutes(5);
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = 0;
+        });
+        
+        options.AddFixedWindowLimiter("refreshToken", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = 20;
+            limiterOptions.Window = TimeSpan.FromMinutes(5);
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = 0;
+        });
+        
+        options.AddPolicy("adminReset", context =>
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "anonymous";
+            return RateLimitPartition.GetFixedWindowLimiter(
+                userId,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 20,
+                    Window = TimeSpan.FromMinutes(15),
+                    QueueLimit = 0
+                });
+        });
+
+        options.OnRejected = async (context, ct) =>
+        {
+            Log.Warning("Rate limit exceeded for {Ip} on {Path}",
+                context.HttpContext.Connection.RemoteIpAddress,
+                context.HttpContext.Request.Path);
+
             context.HttpContext.Response.StatusCode = (int)HttpStatusCode.TooManyRequests;
-            return ValueTask.CompletedTask;
+            context.HttpContext.Response.ContentType = "application/json";
+
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            {
+                context.HttpContext.Response.Headers.RetryAfter =
+                    ((int)retryAfter.TotalSeconds).ToString();
+            }
+
+            var body = JsonSerializer.Serialize(new
+            {
+                error = "Too many requests. Please try again later."
+            });
+            await context.HttpContext.Response.WriteAsync(body, ct);
         };
     });
 
@@ -292,9 +366,10 @@ try
     app.UseResponseCompression();
     app.UseCors("AllowFrontend");
 
+    app.UseAuthentication();
+
     app.UseRateLimiter();
 
-    app.UseAuthentication();
     app.UseAuthorization();
 
     app.MapControllers();
@@ -365,3 +440,5 @@ public class HangfireDashboardAuthorizationFilter : IDashboardAuthorizationFilte
         return httpContext.User.IsInRole("Admin");
     }
 }
+
+public partial class Program { }

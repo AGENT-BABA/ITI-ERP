@@ -89,7 +89,7 @@ export default function TradeListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('');
@@ -490,6 +490,7 @@ export default function TradeListPage() {
         loading={loading}
         pagination={pagination}
         onPageChange={(p) => setPage(p + 1)}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         searchable
         onSearch={(q) => { setSearch(q); setPage(1); }}
         onSort={(columnId, direction) => {

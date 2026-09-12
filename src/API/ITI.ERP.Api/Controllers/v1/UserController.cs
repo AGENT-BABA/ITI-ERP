@@ -5,6 +5,7 @@ using ITI.ERP.Application.DTOs.User;
 using ITI.ERP.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ITI.ERP.Api.Controllers.v1
 {
@@ -72,6 +73,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("{id}/send-password-reset")]
         [Authorize(Policy = Permissions.Users.Manage)]
+        [EnableRateLimiting("adminReset")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> SendPasswordReset(Guid id, CancellationToken cancellationToken)

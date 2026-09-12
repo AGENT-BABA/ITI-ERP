@@ -23,3 +23,15 @@ export async function switchSession(sessionId: string): Promise<TokenResponse> {
   const response = await axiosClient.post<TokenResponse>(`/auth/switch-session/${sessionId}`);
   return response.data;
 }
+
+export async function forgotPassword(email: string): Promise<void> {
+  await axiosClient.post('/auth/forgot-password', { email });
+}
+
+export async function verifyResetToken(token: string): Promise<void> {
+  await axiosClient.post('/auth/verify-reset-token', { token });
+}
+
+export async function resetPasswordWithToken(token: string, newPassword: string, confirmNewPassword: string): Promise<void> {
+  await axiosClient.post('/auth/reset-password', { token, newPassword, confirmNewPassword });
+}

@@ -63,6 +63,7 @@ export interface User {
   isActive: boolean;
   isLocked: boolean;
   roles: string[];
+  roleIds: string[];
   instituteId?: string;
   tradeId?: string;
   batchId?: string;
@@ -131,6 +132,8 @@ export interface Batch {
   computedYearLevel?: number;
   computedYearLevelLabel: string;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 export interface Role {
@@ -198,6 +201,7 @@ export interface Student {
   draftStatus: number;
   createdAt: string;
   updatedAt?: string;
+  retentionUntil?: string;
 }
 
 export interface AttendanceRecord {

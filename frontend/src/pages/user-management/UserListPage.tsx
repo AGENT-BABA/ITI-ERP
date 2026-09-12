@@ -18,7 +18,7 @@ import {
   ToggleOn,
   ToggleOff,
   LockOpen as LockOpenIcon,
-  VpnKey as VpnKeyIcon,
+  MailOutlined as MailOutlinedIcon,
   DeleteOutlined as DeleteIcon,
 } from '@mui/icons-material';
 import { z } from 'zod';
@@ -32,7 +32,7 @@ import {
   createUser,
   updateUser,
   toggleUserStatus,
-  resetPassword,
+  sendPasswordReset,
   unlockUser,
   deleteUser,
   getRoles,
@@ -51,7 +51,7 @@ const TRADE_HEAD_ROLE_NAME = 'TradeHead';
 
 const createUserSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters').max(50, 'Username must be 50 characters or less').regex(/^[a-zA-Z0-9]+$/, 'Username must contain only letters and numbers'),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  email: z.string().min(1, 'Email is required').email('Invalid email address'),
   firstName: z.string().min(1, 'First Name is required').max(100, 'First Name must be 100 characters or less'),
   lastName: z.string().max(100, 'Last Name must be 100 characters or less').optional().or(z.literal('')),
   phone: z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits').optional().or(z.literal('')),
@@ -71,17 +71,8 @@ const editUserSchema = z.object({
   roleIds: z.array(z.string()).min(1, 'At least one role is required'),
 });
 
-const resetPasswordSchema = z.object({
-  newPassword: z.string().min(6, 'Password must be at least 6 characters').max(100, 'Password must be 100 characters or less')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/\d/, 'Password must contain at least one digit')
-    .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one special character'),
-});
-
 type CreateFormData = z.infer<typeof createUserSchema>;
 type EditFormData = z.infer<typeof editUserSchema>;
-type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 const defaultCreateValues: CreateFormData = {
   username: '',
@@ -101,10 +92,6 @@ const defaultEditValues: EditFormData = {
   roleIds: [],
 };
 
-const defaultResetPasswordValues: ResetPasswordFormData = {
-  newPassword: '',
-};
-
 export default function UserListPage() {
   const { isSuperAdmin, isInstituteAdmin } = useAuth();
   const canManageUsers = isSuperAdmin || isInstituteAdmin;
@@ -113,7 +100,7 @@ export default function UserListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
 
@@ -137,10 +124,7 @@ export default function UserListPage() {
   const [toggleTarget, setToggleTarget] = useState<User | null>(null);
   const [toggling, setToggling] = useState(false);
 
-  const [resetTarget, setResetTarget] = useState<User | null>(null);
-  const [resetting, setResetting] = useState(false);
-  const [resetFormData, setResetFormData] = useState<ResetPasswordFormData>(defaultResetPasswordValues);
-  const [resetFormErrors, setResetFormErrors] = useState<Record<string, string>>({});
+  const [sendingReset, setSendingReset] = useState(false);
 
   const [unlockTarget, setUnlockTarget] = useState<User | null>(null);
   const [unlocking, setUnlocking] = useState(false);
@@ -227,7 +211,7 @@ export default function UserListPage() {
         firstName: latest.firstName,
         lastName: latest.lastName || '',
         phone: latest.phone || '',
-        roleIds: latest.roles || [],
+        roleIds: latest.roleIds || [],
       });
       setEditTradeId(latest.tradeId || '');
     } catch (err: any) {
@@ -308,7 +292,7 @@ export default function UserListPage() {
         try {
           const request: CreateUserRequest = {
             username: result.data.username.trim(),
-            email: result.data.email?.trim() || undefined,
+            email: result.data.email.trim(),
             firstName: result.data.firstName.trim(),
             lastName: result.data.lastName?.trim() || undefined,
             phone: result.data.phone?.trim() || undefined,
@@ -344,7 +328,7 @@ export default function UserListPage() {
         try {
           const request: CreateUserRequest = {
             username: result.data.username.trim(),
-            email: result.data.email?.trim() || undefined,
+            email: result.data.email.trim(),
             firstName: result.data.firstName.trim(),
             lastName: result.data.lastName?.trim() || undefined,
             phone: result.data.phone?.trim() || undefined,
@@ -431,35 +415,16 @@ export default function UserListPage() {
     }
   };
 
-  const handleResetPasswordClick = (user: User) => {
-    setResetTarget(user);
-    setResetFormData(defaultResetPasswordValues);
-    setResetFormErrors({});
-  };
-
-  const handleResetPasswordConfirm = async () => {
-    if (!resetTarget) return;
-    const result = resetPasswordSchema.safeParse(resetFormData);
-    if (!result.success) {
-      const errors: Record<string, string> = {};
-      result.error.issues.forEach((issue) => {
-        const field = issue.path[0] as string;
-        if (!errors[field]) errors[field] = issue.message;
-      });
-      setResetFormErrors(errors);
-      return;
-    }
-    setResetting(true);
+  const handleSendPasswordResetClick = async (user: User) => {
+    setSendingReset(true);
     try {
-      await resetPassword(resetTarget.id, { newPassword: result.data.newPassword });
-      setResetTarget(null);
-      setSnackbar({ open: true, message: 'Password reset successfully', severity: 'success' });
+      await sendPasswordReset(user.id);
+      setSnackbar({ open: true, message: `Password reset email sent to ${user.email || user.username}`, severity: 'success' });
     } catch (err: any) {
-      const apiError = err.response?.data?.error || err.response?.data?.message || 'Failed to reset password';
-      setResetTarget(null);
+      const apiError = err.response?.data?.error || err.response?.data?.message || 'Failed to send password reset';
       setSnackbar({ open: true, message: apiError, severity: 'error' });
     } finally {
-      setResetting(false);
+      setSendingReset(false);
     }
   };
 
@@ -568,13 +533,14 @@ export default function UserListPage() {
                     )}
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Reset Password">
+                <Tooltip title="Send Password Reset">
                   <IconButton
                     size="small"
-                    onClick={() => handleResetPasswordClick(row)}
+                    onClick={() => handleSendPasswordResetClick(row)}
                     color="secondary"
+                    disabled={sendingReset}
                   >
-                    <VpnKeyIcon fontSize="small" />
+                    <MailOutlinedIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
                 {row.isLocked && (
@@ -637,6 +603,7 @@ export default function UserListPage() {
         loading={loading}
         pagination={pagination}
         onPageChange={(p) => setPage(p + 1)}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         searchable
         onSearch={(q) => { setSearch(q); setPage(1); }}
       />
@@ -672,7 +639,7 @@ export default function UserListPage() {
                 required
               />
               <TextField
-                label="Email"
+                label="Email *"
                 value={createFormData.email}
                 onChange={(e) => handleCreateFieldChange('email', e.target.value)}
                 onBlur={(e) => {
@@ -682,6 +649,7 @@ export default function UserListPage() {
                 error={!!formErrors.email}
                 helperText={formErrors.email}
                 fullWidth
+                required
               />
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
@@ -920,45 +888,6 @@ export default function UserListPage() {
         confirmText={toggleTarget?.isActive ? 'Deactivate' : 'Activate'}
         severity={toggleTarget?.isActive ? 'warning' : 'info'}
       />
-
-      <FormDialog
-        open={resetTarget !== null}
-        onClose={() => { if (!resetting) setResetTarget(null); }}
-        title={`Reset Password — ${resetTarget?.username ?? ''}`}
-        onSubmit={handleResetPasswordConfirm}
-        loading={resetting}
-      >
-        <Stack spacing={2}>
-          <TextField
-            label="New Password"
-            type="password"
-            value={resetFormData.newPassword}
-            onChange={(e) => {
-              setResetFormData({ newPassword: e.target.value });
-              if (resetFormErrors.newPassword) {
-                setResetFormErrors((prev) => {
-                  const next = { ...prev };
-                  delete next.newPassword;
-                  return next;
-                });
-              }
-            }}
-            onBlur={(e) => {
-              const result = resetPasswordSchema.safeParse({ newPassword: e.target.value });
-              if (!result.success) {
-                setResetFormErrors((prev) => ({
-                  ...prev,
-                  newPassword: result.error.issues[0]?.message || '',
-                }));
-              }
-            }}
-            error={!!resetFormErrors.newPassword}
-            helperText={resetFormErrors.newPassword}
-            fullWidth
-            required
-          />
-        </Stack>
-      </FormDialog>
 
       <ConfirmDialog
         open={unlockTarget !== null}

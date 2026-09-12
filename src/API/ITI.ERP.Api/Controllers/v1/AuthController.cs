@@ -24,6 +24,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("login")]
         [AllowAnonymous]
+        [EnableRateLimiting("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
         {
             var result = await _authService.LoginAsync(request, cancellationToken);
@@ -32,6 +33,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("refresh-token")]
         [AllowAnonymous]
+        [EnableRateLimiting("refreshToken")]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request, CancellationToken cancellationToken)
         {
             var result = await _authService.RefreshTokenAsync(request, cancellationToken);
@@ -60,6 +62,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("setup")]
         [AllowAnonymous]
+        [EnableRateLimiting("setup")]
         public async Task<IActionResult> SetupSuperAdmin([FromBody] SetupSuperAdminRequest request, CancellationToken cancellationToken)
         {
             var result = await _authService.SetupSuperAdminAsync(request, cancellationToken);
@@ -76,7 +79,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("forgot-password")]
         [AllowAnonymous]
-        [EnableRateLimiting("passwordReset")]
+        [EnableRateLimiting("forgotPassword")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken cancellationToken)
         {
             var result = await _userService.ForgotPasswordAsync(request.Email, cancellationToken);
@@ -85,6 +88,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("verify-reset-token")]
         [AllowAnonymous]
+        [EnableRateLimiting("verifyToken")]
         public async Task<IActionResult> VerifyResetToken([FromBody] VerifyResetTokenRequest request, CancellationToken cancellationToken)
         {
             var result = await _userService.VerifyResetTokenAsync(request.Token, cancellationToken);
@@ -93,7 +97,7 @@ namespace ITI.ERP.Api.Controllers.v1
 
         [HttpPost("reset-password")]
         [AllowAnonymous]
-        [EnableRateLimiting("passwordReset")]
+        [EnableRateLimiting("resetPassword")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordWithTokenRequest request, CancellationToken cancellationToken)
         {
             var result = await _userService.ResetPasswordWithTokenAsync(request.Token, request.NewPassword, cancellationToken);

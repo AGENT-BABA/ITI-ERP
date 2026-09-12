@@ -301,7 +301,7 @@ public class AuthService : IAuthService
             Id = Guid.NewGuid(),
             InstituteId = null,
             Username = request.Username,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password , 12),
             Email = request.Email?.Trim(),
             FirstName = request.FirstName?.Trim() ?? "Super",
             LastName = request.LastName?.Trim() ?? "Admin",

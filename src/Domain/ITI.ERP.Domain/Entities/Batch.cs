@@ -13,6 +13,8 @@ public class Batch : SoftDeletableEntity
     public string? Code { get; set; }
     public int? Capacity { get; set; }
     public bool IsActive { get; set; } = true;
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
 
     public Institute Institute { get; set; } = null!;
     public Trade Trade { get; set; } = null!;

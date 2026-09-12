@@ -193,9 +193,9 @@ public class UserService : IUserService
         if (await _context.Users.AnyAsync(u => u.Username == request.Username && u.InstituteId == instituteId && !u.IsDeleted, ct))
             return Result<UserDto>.Failure("Username already exists in this institute.");
 
-        string? email = request.Email?.Trim();
+        string email = request.Email.Trim();
 
-        if (!string.IsNullOrEmpty(email) && await _context.Users.AnyAsync(u => u.Email == email && u.InstituteId == instituteId && !u.IsDeleted, ct))
+        if (await _context.Users.AnyAsync(u => u.Email == email && u.InstituteId == instituteId && !u.IsDeleted, ct))
             return Result<UserDto>.Failure($"A user with email '{email}' already exists in this institute.");
 
         var user = new User
@@ -203,7 +203,7 @@ public class UserService : IUserService
             InstituteId = instituteId,
             Username = request.Username,
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password , 12),
             FirstName = request.FirstName,
             LastName = request.LastName,
             Phone = request.Phone,
@@ -350,6 +350,9 @@ public class UserService : IUserService
                     .Where(ur => ur.UserId == user.Id)
                     .ToListAsync(ct);
 
+                var preservedTradeId = request.TradeId ?? existingUserRoles.FirstOrDefault()?.TradeId;
+                var preservedBatchId = request.BatchId ?? existingUserRoles.FirstOrDefault()?.BatchId;
+
                 _context.UserRoles.RemoveRange(existingUserRoles);
 
                 var academicSessionId = await AcademicSessionHelper.ResolveActiveSessionIdAsync(_context, _currentUserService, ct);
@@ -368,8 +371,8 @@ public class UserService : IUserService
                     InstituteId = userInstituteId,
                     AcademicSessionId = academicSessionId,
                     IsActive = true,
-                    TradeId = request.TradeId,
-                    BatchId = request.BatchId
+                    TradeId = preservedTradeId,
+                    BatchId = preservedBatchId
                 });
 
                 await _context.UserRoles.AddRangeAsync(newUserRoles, ct);
@@ -461,6 +464,15 @@ public class UserService : IUserService
         if (user is null)
             return Result.Success();
 
+        var recentTokenExists = await _context.PasswordResetTokens
+            .AnyAsync(t => t.UserId == user.Id
+                && !t.UsedAt.HasValue
+                && t.ExpiresAt > DateTime.UtcNow
+                && t.CreatedAt > DateTime.UtcNow.AddMinutes(-1), ct);
+
+        if (recentTokenExists)
+            return Result.Success();
+
         return await CreateAndSendResetTokenAsync(user.Id, user.Email!, user.FirstName, user.InstituteId, null, ct);
     }
 
@@ -513,7 +525,7 @@ public class UserService : IUserService
                 return Result.Failure("User not found.");
             }
 
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword , 12);
             user.FailedLoginAttempts = 0;
             user.IsLocked = false;
             user.LockedUntil = null;
@@ -566,6 +578,7 @@ public class UserService : IUserService
             UserId = userId,
             TokenHash = tokenHash,
             ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+            CreatedAt = DateTime.UtcNow,
             InitiatedByUserId = initiatedByUserId,
             InstituteId = instituteId
         };

@@ -63,7 +63,16 @@ public static class DependencyInjection
         services.AddTransient<ILocationService, LocationService>();
 
         services.Configure<EmailOptions>(configuration.GetSection("Email"));
-        services.AddScoped<IEmailService, ConsoleEmailService>();
+
+        var emailProvider = configuration["Email:Provider"] ?? "Console";
+        if (string.Equals(emailProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<IEmailService, SmtpEmailService>();
+        }
+        else
+        {
+            services.AddScoped<IEmailService, ConsoleEmailService>();
+        }
 
         return services;
     }

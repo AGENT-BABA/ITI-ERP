@@ -1,5 +1,6 @@
 using Hangfire;
 using ITI.ERP.Application.Common.Interfaces;
+using ITI.ERP.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -31,13 +32,16 @@ public class RetentionCleanupJob : IRecurringJob
 
         var now = DateTime.UtcNow;
 
-        var expiredSessions = await _context.AcademicSessions
-            .Where(s => !s.IsDeleted && s.EndDate.AddYears(1) <= now)
+        var expiredStudents = await _context.Students
+            .Where(s => s.Status == StudentStatus.Archived
+                && s.RetentionUntil != null
+                && s.RetentionUntil <= now)
+            .Select(s => new { s.Id, s.FirstName, s.LastName, s.RetentionUntil })
             .ToListAsync();
 
-        if (expiredSessions.Count == 0)
+        if (expiredStudents.Count == 0)
         {
-            _logger.LogInformation("No expired academic sessions found. Retention cleanup complete.");
+            _logger.LogInformation("No archived students past retention found. Cleanup complete.");
             return;
         }
 
@@ -46,65 +50,57 @@ public class RetentionCleanupJob : IRecurringJob
         var totalAttendanceDeleted = 0;
         var errors = 0;
 
-        foreach (var session in expiredSessions)
+        foreach (var student in expiredStudents)
         {
             _logger.LogInformation(
-                "Processing expired session {SessionYear} (EndDate: {EndDate}, RetentionExpiry: {Expiry})",
-                session.SessionYear, session.EndDate, session.EndDate.AddYears(1));
+                "Processing expired student {StudentName} (RetentionUntil: {RetentionUntil})",
+                $"{student.FirstName} {student.LastName}", student.RetentionUntil);
 
-            var studentIds = await _context.Students
-                .Where(s => s.AcademicSessionId == session.Id && !s.IsDeleted)
-                .Select(s => s.Id)
-                .ToListAsync();
-
-            foreach (var studentId in studentIds)
+            try
             {
-                try
-                {
-                    await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await _context.Database.BeginTransactionAsync();
 
-                    var marksDeleted = await _context.PracticalMarks
-                        .Where(m => m.StudentId == studentId)
-                        .ExecuteDeleteAsync();
+                var marksDeleted = await _context.PracticalMarks
+                    .Where(m => m.StudentId == student.Id)
+                    .ExecuteDeleteAsync();
 
-                    var yearlyMarksDeleted = await _context.YearlyPracticalMarks
-                        .Where(m => m.StudentId == studentId)
-                        .ExecuteDeleteAsync();
+                var yearlyMarksDeleted = await _context.YearlyPracticalMarks
+                    .Where(m => m.StudentId == student.Id)
+                    .ExecuteDeleteAsync();
 
-                    var attendanceDeleted = await _context.AttendanceRecords
-                        .Where(a => a.StudentId == studentId)
-                        .ExecuteDeleteAsync();
+                var attendanceDeleted = await _context.AttendanceRecords
+                    .Where(a => a.StudentId == student.Id)
+                    .ExecuteDeleteAsync();
 
-                    await _context.Students
-                        .Where(s => s.Id == studentId)
-                        .ExecuteDeleteAsync();
+                await _context.Students
+                    .Where(s => s.Id == student.Id)
+                    .ExecuteDeleteAsync();
 
-                    await _context.SaveChangesAsync(CancellationToken.None);
-                    await transaction.CommitAsync();
+                await _context.SaveChangesAsync(CancellationToken.None);
+                await transaction.CommitAsync();
 
-                    totalStudentsDeleted++;
-                    totalMarksDeleted += marksDeleted + yearlyMarksDeleted;
-                    totalAttendanceDeleted += attendanceDeleted;
+                totalStudentsDeleted++;
+                totalMarksDeleted += marksDeleted + yearlyMarksDeleted;
+                totalAttendanceDeleted += attendanceDeleted;
 
-                    _logger.LogDebug(
-                        "Deleted student {StudentId}: {Marks} marks, {Attendance} attendance records",
-                        studentId, marksDeleted + yearlyMarksDeleted, attendanceDeleted);
-                }
-                catch (Exception ex)
-                {
-                    errors++;
-                    _logger.LogError(ex, "Failed to delete student {StudentId} during retention cleanup", studentId);
-                }
+                _logger.LogDebug(
+                    "Deleted student {StudentId} ({StudentName}): {Marks} marks, {Attendance} attendance records",
+                    student.Id, $"{student.FirstName} {student.LastName}", marksDeleted + yearlyMarksDeleted, attendanceDeleted);
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                _logger.LogError(ex, "Failed to delete student {StudentId} during retention cleanup", student.Id);
             }
         }
 
         await _auditService.LogAsync(
-            Domain.Enums.AuditAction.RetentionCleanup,
+            AuditAction.RetentionCleanup,
             "RetentionCleanup",
             null,
             new
             {
-                SessionsProcessed = expiredSessions.Count,
+                StudentsEvaluated = expiredStudents.Count,
                 StudentsDeleted = totalStudentsDeleted,
                 MarksDeleted = totalMarksDeleted,
                 AttendanceDeleted = totalAttendanceDeleted,
@@ -116,8 +112,8 @@ public class RetentionCleanupJob : IRecurringJob
         await _context.SaveChangesAsync(CancellationToken.None);
 
         _logger.LogInformation(
-            "Retention cleanup complete. Sessions: {Sessions}, Students deleted: {Students}, " +
+            "Retention cleanup complete. Students evaluated: {Evaluated}, Deleted: {Deleted}, " +
             "Marks deleted: {Marks}, Attendance deleted: {Attendance}, Errors: {Errors}",
-            expiredSessions.Count, totalStudentsDeleted, totalMarksDeleted, totalAttendanceDeleted, errors);
+            expiredStudents.Count, totalStudentsDeleted, totalMarksDeleted, totalAttendanceDeleted, errors);
     }
 }

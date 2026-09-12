@@ -14,7 +14,7 @@ export interface UpdateAcademicSessionRequest {
   endDate?: string;
 }
 
-export async function getAcademicSessions(params: PaginationRequest): Promise<PaginatedResponse<AcademicSession>> {
+export async function getAcademicSessions(params: PaginationRequest & { instituteId?: string }): Promise<PaginatedResponse<AcademicSession>> {
   const response = await axiosClient.get<PaginatedResponse<AcademicSession>>('/academic-sessions', { params });
   return response.data;
 }

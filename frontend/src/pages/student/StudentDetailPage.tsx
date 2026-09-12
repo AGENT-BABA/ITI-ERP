@@ -58,7 +58,7 @@ export default function StudentDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteStudent,
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => deleteStudent(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] });
       navigate(backPath);
@@ -177,11 +177,14 @@ export default function StudentDetailPage() {
 
       <ConfirmDialog
         open={showDeleteDialog}
-        title="Delete Student"
-        message={`Are you sure you want to delete ${student.firstName} ${student.lastName}? This action cannot be undone.`}
-        confirmText="Delete"
+        title="Permanently Delete Student"
+        message={`Are you sure you want to permanently delete ${student.firstName} ${student.lastName}? This will immediately remove the student and all their attendance, marks, and practical records. This action cannot be undone.`}
+        confirmText="Delete Permanently"
         severity="error"
-        onConfirm={() => deleteMutation.mutate(id!)}
+        requireReason
+        reasonLabel="Deletion reason (required)"
+        loading={deleteMutation.isPending}
+        onConfirm={(reason) => reason && deleteMutation.mutate({ id: id!, reason })}
         onClose={() => setShowDeleteDialog(false)}
       />
 

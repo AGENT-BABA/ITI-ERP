@@ -59,3 +59,7 @@ uploads/
 # Test results
 TestResults/
 coverage/
+
+#Secrets
+appsettings.json
+appsettings.Production.json

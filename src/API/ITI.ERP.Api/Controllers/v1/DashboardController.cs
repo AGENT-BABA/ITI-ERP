@@ -33,6 +33,7 @@ public class DashboardController : BaseApiController
     [ProducesResponseType(typeof(List<AttendanceTrendDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAttendanceTrend([FromQuery] int days = 30, CancellationToken cancellationToken = default)
     {
+        days = Math.Clamp(days, 1, 365);
         var result = await _dashboardService.GetAttendanceTrendAsync(days, cancellationToken);
         return HandleResult(result);
     }
@@ -49,6 +50,7 @@ public class DashboardController : BaseApiController
     [ProducesResponseType(typeof(List<RecentActivityDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRecentActivities([FromQuery] int count = 10, CancellationToken cancellationToken = default)
     {
+        count = Math.Clamp(count, 1, 50);
         var result = await _dashboardService.GetRecentActivitiesAsync(count, cancellationToken);
         return HandleResult(result);
     }

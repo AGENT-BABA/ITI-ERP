@@ -38,6 +38,21 @@ public class StudentController : BaseApiController
         return HandleResult(result);
     }
 
+    [HttpGet("archived")]
+    [Authorize(Policy = Permissions.Student.View)]
+    [ProducesResponseType(typeof(PaginatedList<StudentDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetArchivedStudents(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? searchTerm = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _studentService.GetArchivedStudentsAsync(
+            new PaginationRequest { PageNumber = pageNumber, PageSize = pageSize, SearchTerm = searchTerm },
+            cancellationToken);
+        return HandleResult(result);
+    }
+
     [HttpGet("{id}")]
     [Authorize(Policy = Permissions.Student.View)]
     [ProducesResponseType(typeof(StudentDto), StatusCodes.Status200OK)]
@@ -113,9 +128,20 @@ public class StudentController : BaseApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteStudent(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeleteStudent(Guid id, [FromBody] DeleteStudentRequest request, CancellationToken cancellationToken)
     {
-        var result = await _studentService.DeleteStudentAsync(id, cancellationToken);
+        var result = await _studentService.DeleteStudentAsync(id, request.Reason, cancellationToken);
+        return HandleResult(result);
+    }
+
+    [HttpPost("{id}/unarchive")]
+    [Authorize(Policy = Permissions.Student.Archive)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UnarchiveStudent(Guid id, [FromBody] UnarchiveStudentRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _studentService.UnarchiveStudentAsync(id, request.Reason, cancellationToken);
         return HandleResult(result);
     }
 

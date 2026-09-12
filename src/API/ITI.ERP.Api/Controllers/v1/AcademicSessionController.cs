@@ -24,9 +24,9 @@ namespace ITI.ERP.Api.Controllers.v1
         [HttpGet]
         [Authorize(Policy = Permissions.AcademicSession.View)]
         [ProducesResponseType(typeof(PaginatedList<AcademicSessionDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetAcademicSessions([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? searchTerm = null, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> GetAcademicSessions([FromQuery] Guid? instituteId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? searchTerm = null, CancellationToken cancellationToken = default)
         {
-            var result = await _academicSessionService.GetAcademicSessionsAsync(new PaginationRequest { PageNumber = pageNumber, PageSize = pageSize, SearchTerm = searchTerm }, cancellationToken);
+            var result = await _academicSessionService.GetAcademicSessionsAsync(instituteId, new PaginationRequest { PageNumber = pageNumber, PageSize = pageSize, SearchTerm = searchTerm }, cancellationToken);
             return HandleResult(result);
         }
 

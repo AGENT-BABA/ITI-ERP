@@ -14,9 +14,11 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
             .WithMessage("Username must be alphanumeric.");
 
         RuleFor(x => x.Email)
+            .NotEmpty()
+            .WithMessage("Email is required.")
             .EmailAddress()
-            .MaximumLength(200)
-            .When(x => !string.IsNullOrEmpty(x.Email));
+            .WithMessage("Invalid email address.")
+            .MaximumLength(200);
 
         RuleFor(x => x.Password)
             .NotEmpty()

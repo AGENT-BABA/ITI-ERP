@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Mail;
 using ITI.ERP.Application.Common.Interfaces;
@@ -20,6 +21,8 @@ public class SmtpEmailService : IEmailService
 
     public async Task SendPasswordResetEmailAsync(string toEmail, string userName, string resetLink, string? instituteName, CancellationToken ct)
     {
+        ValidateSmtpConfiguration();
+
         var subject = "Password Reset Request - ITI ERP";
         var body = BuildPasswordResetBody(userName, resetLink, instituteName);
 
@@ -33,9 +36,7 @@ public class SmtpEmailService : IEmailService
         using var client = new SmtpClient(_options.SmtpHost, _options.SmtpPort)
         {
             EnableSsl = _options.SmtpUseSsl,
-            Credentials = string.IsNullOrEmpty(_options.SmtpUsername)
-                ? null
-                : new NetworkCredential(_options.SmtpUsername, _options.SmtpPassword)
+            Credentials = new NetworkCredential(_options.SmtpUsername, _options.SmtpPassword)
         };
 
         try
@@ -43,10 +44,34 @@ public class SmtpEmailService : IEmailService
             await client.SendMailAsync(message, ct);
             _logger.LogInformation("Password reset email sent to {Email}", toEmail);
         }
-        catch (Exception ex)
+        catch (SmtpException)
         {
-            _logger.LogError(ex, "Failed to send password reset email to {Email}", toEmail);
-            throw;
+            _logger.LogError("Failed to send password reset email to {Email}: SMTP error (status code: {StatusCode})", toEmail, "transient/failure");
+            throw new InvalidOperationException("Failed to send password reset email due to an SMTP error. Check SMTP server availability and configuration.");
+        }
+        catch (Exception)
+        {
+            _logger.LogError("Failed to send password reset email to {Email}: unexpected error", toEmail);
+            throw new InvalidOperationException("Failed to send password reset email. Verify SMTP configuration and server connectivity.");
+        }
+    }
+
+    private void ValidateSmtpConfiguration()
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(_options.SmtpHost))
+            errors.Add("Email:SmtpHost is not configured.");
+        if (string.IsNullOrWhiteSpace(_options.SmtpUsername))
+            errors.Add("Email:SmtpUsername is not configured.");
+        if (string.IsNullOrWhiteSpace(_options.SmtpPassword))
+            errors.Add("Email:SmtpPassword is not configured.");
+
+        if (errors.Count > 0)
+        {
+            errors.Add("Set via: dotnet user-secrets set \"Email:SmtpUsername\" \"<address>\" --project src/API/ITI.ERP.Api");
+            errors.Add("Set via: dotnet user-secrets set \"Email:SmtpPassword\" \"<app-password>\" --project src/API/ITI.ERP.Api");
+            throw new InvalidOperationException(string.Join(" ", errors));
         }
     }
 

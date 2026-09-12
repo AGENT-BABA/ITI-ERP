@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import {
   Box,
   Alert,
   Stack,
+  Link,
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -232,6 +233,20 @@ export default function LoginPage() {
             >
               {isSubmitting ? 'Logging in...' : 'Sign In'}
             </Button>
+            <Box sx={{ textAlign: 'center', mt: 1 }}>
+              <Link
+                component={RouterLink}
+                to="/forgot-password"
+                sx={{
+                  color: 'rgba(96,165,250,0.9)',
+                  textDecoration: 'none',
+                  fontSize: '0.875rem',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                Forgot Password?
+              </Link>
+            </Box>
           </Stack>
         </Box>
       </Box>

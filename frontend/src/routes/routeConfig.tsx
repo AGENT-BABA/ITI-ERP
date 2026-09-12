@@ -11,6 +11,8 @@ import {
 } from '../navigation/navigationConfig';
 
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 const InstituteListPage = lazy(() => import('../pages/institute/InstituteListPage'));
 const InstituteTradeHeadsPage = lazy(() => import('../pages/institute/InstituteTradeHeadsPage'));
@@ -54,6 +56,14 @@ export const routeConfig = [
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
   {
     path: '/',

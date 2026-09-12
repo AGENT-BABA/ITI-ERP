@@ -576,6 +576,9 @@ public class StudentService : IStudentService
 
     public async Task<Result> ArchiveStudentAsync(Guid id, string reason, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure("Archive reason is required.");
+
         var accessCheck = await _tradeAccess.ValidateStudentAccessAsync(id, ct);
         if (!accessCheck.IsSuccess)
             return Result.Failure(accessCheck.Error!);
@@ -588,7 +591,7 @@ public class StudentService : IStudentService
         if (!isSuperAdmin)
             query = query.Where(s => s.InstituteId == _currentUserService.InstituteId);
 
-        var student = await query.FirstOrDefaultAsync(ct);
+        var student = await query.Include(s => s.AcademicSession).FirstOrDefaultAsync(ct);
 
         if (student is null)
             return Result.Failure("Student not found.");
@@ -602,12 +605,15 @@ public class StudentService : IStudentService
         try
         {
             student.ChangeStatus(StudentStatus.Archived, reason, _currentUserService.UserId!.Value, DateTime.UtcNow);
+            student.WithdrawalDate = DateTime.UtcNow;
+            student.WithdrawalReason = reason;
+            student.RetentionUntil = student.AcademicSession.EndDate.AddYears(1);
 
             await _context.SaveChangesAsync(ct);
 
-            await _auditService.LogAsync(AuditAction.Update, nameof(Student), student.Id,
+            await _auditService.LogAsync(AuditAction.Archive, nameof(Student), student.Id,
                 new { Status = oldStatus },
-                new { Status = StudentStatus.Archived, reason }, ct);
+                new { Status = StudentStatus.Archived, reason, student.RetentionUntil }, ct);
             await _context.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
@@ -620,8 +626,11 @@ public class StudentService : IStudentService
         return Result.Success();
     }
 
-    public async Task<Result> DeleteStudentAsync(Guid id, CancellationToken ct)
+    public async Task<Result> DeleteStudentAsync(Guid id, string reason, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure("Deletion reason is required.");
+
         var instituteId = _currentUserService.InstituteId;
         var isSuperAdmin = _currentUserService.HasRole(RoleConstants.Admin);
 
@@ -643,15 +652,31 @@ public class StudentService : IStudentService
         if (student is null)
             return Result.Failure("Student not found.");
 
-        if (student.IsDeleted)
-            return Result.Failure("Student is already deleted.");
+        var studentName = student.GetFullName();
+        var batchId = student.BatchId;
+        var tradeId = student.TradeId;
 
-        student.IsDeleted = true;
-        await _context.SaveChangesAsync(ct);
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await _context.PracticalMarks.Where(m => m.StudentId == id).ExecuteDeleteAsync(ct);
+            await _context.YearlyPracticalMarks.Where(m => m.StudentId == id).ExecuteDeleteAsync(ct);
+            await _context.AttendanceRecords.Where(a => a.StudentId == id).ExecuteDeleteAsync(ct);
+            await _context.Students.Where(s => s.Id == id).ExecuteDeleteAsync(ct);
 
-        await _auditService.LogAsync(AuditAction.Update, nameof(Student), student.Id,
-            new { IsDeleted = false },
-            new { IsDeleted = true, DeletedBy = _currentUserService.UserId }, ct);
+            await _context.SaveChangesAsync(ct);
+
+            await _auditService.LogAsync(AuditAction.Delete, nameof(Student), id,
+                new { StudentName = studentName, student.RollNumber, student.AdmissionNumber, BatchId = batchId, TradeId = tradeId },
+                new { Reason = reason, DeletedBy = _currentUserService.UserId }, ct);
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         return Result.Success();
     }
@@ -689,6 +714,99 @@ public class StudentService : IStudentService
         await _auditService.LogAsync(AuditAction.Update, nameof(Student), student.Id,
             new { PhotoPath = student.PhotoPath },
             new { PhotoPath = storedFileName }, ct);
+
+        return Result.Success();
+    }
+
+    public async Task<Result<PaginatedList<StudentDto>>> GetArchivedStudentsAsync(PaginationRequest request, CancellationToken ct)
+    {
+        var isSuperAdmin = _currentUserService.HasRole(RoleConstants.Admin);
+
+        IQueryable<Student> query = _context.Students
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Include(s => s.Trade)
+            .Include(s => s.Batch)
+            .Where(s => s.Status == StudentStatus.Archived);
+
+        if (!isSuperAdmin)
+            query = query.Where(s => s.InstituteId == _currentUserService.InstituteId);
+
+        query = _tradeAccess.ApplyTradeFilter(query, s => s.TradeId);
+        query = _tradeAccess.ApplyBatchFilter(query, s => s.BatchId);
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var searchTerm = request.SearchTerm.ToLower();
+            query = query.Where(s =>
+                s.FirstName.ToLower().Contains(searchTerm) ||
+                s.LastName.ToLower().Contains(searchTerm) ||
+                s.RollNumber.ToLower().Contains(searchTerm) ||
+                s.AdmissionNumber.ToLower().Contains(searchTerm));
+        }
+
+        query = query.OrderBy(s => s.LastName).ThenBy(s => s.FirstName);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var items = await query
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToListAsync(ct);
+
+        var dtoItems = items.Select(s => s.ToDto()).ToList();
+        var paginatedList = new PaginatedList<StudentDto>(dtoItems, totalCount, request.PageNumber, request.PageSize);
+
+        return Result<PaginatedList<StudentDto>>.Success(paginatedList);
+    }
+
+    public async Task<Result> UnarchiveStudentAsync(Guid id, string reason, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Failure("Unarchive reason is required.");
+
+        var accessCheck = await _tradeAccess.ValidateStudentAccessAsync(id, ct);
+        if (!accessCheck.IsSuccess)
+            return Result.Failure(accessCheck.Error!);
+
+        var isSuperAdmin = _currentUserService.HasRole(RoleConstants.Admin);
+
+        var query = _context.Students
+            .IgnoreQueryFilters()
+            .Where(s => s.Id == id);
+
+        if (!isSuperAdmin)
+            query = query.Where(s => s.InstituteId == _currentUserService.InstituteId);
+
+        var student = await query.FirstOrDefaultAsync(ct);
+
+        if (student is null)
+            return Result.Failure("Student not found.");
+
+        if (student.Status != StudentStatus.Archived)
+            return Result.Failure("Student is not archived.");
+
+        var oldRetentionUntil = student.RetentionUntil;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            student.ChangeStatus(StudentStatus.Active, reason, _currentUserService.UserId!.Value, DateTime.UtcNow);
+            student.RetentionUntil = null;
+
+            await _context.SaveChangesAsync(ct);
+
+            await _auditService.LogAsync(AuditAction.Restore, nameof(Student), student.Id,
+                new { Status = StudentStatus.Archived, RetentionUntil = oldRetentionUntil },
+                new { Status = StudentStatus.Active, reason }, ct);
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         return Result.Success();
     }

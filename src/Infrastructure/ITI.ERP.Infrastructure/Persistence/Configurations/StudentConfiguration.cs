@@ -131,5 +131,8 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(s => !s.IsDeleted);
+
+        builder.Property(s => s.RetentionUntil)
+            .IsRequired(false);
     }
 }

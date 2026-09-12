@@ -52,6 +52,7 @@ public static class StudentMapper
         EmergencyContactRelation = s.EmergencyContactRelation,
         DraftStatus = (int)s.DraftStatus,
         CreatedAt = s.CreatedAt,
-        UpdatedAt = s.UpdatedAt
+        UpdatedAt = s.UpdatedAt,
+        RetentionUntil = s.RetentionUntil
     };
 }

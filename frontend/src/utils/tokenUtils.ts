@@ -1,5 +1,8 @@
 import { TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../config';
 
+const SESSION_YEAR_KEY = 'iti_erp_session_year';
+const INSTITUTE_FILTER_KEY = 'iti_erp_institute_filter';
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -86,4 +89,22 @@ export function getAcademicSessionIdFromToken(token: string): string | undefined
   } catch {
     return undefined;
   }
+}
+
+export function getSessionYearFromStorage(): string | null {
+  return localStorage.getItem(SESSION_YEAR_KEY);
+}
+
+export function setSessionYearInStorage(year: string | null): void {
+  if (year) localStorage.setItem(SESSION_YEAR_KEY, year);
+  else localStorage.removeItem(SESSION_YEAR_KEY);
+}
+
+export function getInstituteFilterFromStorage(): string | null {
+  return localStorage.getItem(INSTITUTE_FILTER_KEY);
+}
+
+export function setInstituteFilterInStorage(id: string | null): void {
+  if (id) localStorage.setItem(INSTITUTE_FILTER_KEY, id);
+  else localStorage.removeItem(INSTITUTE_FILTER_KEY);
 }

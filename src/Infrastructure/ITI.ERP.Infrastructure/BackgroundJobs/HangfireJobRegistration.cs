@@ -55,6 +55,15 @@ namespace ITI.ERP.Infrastructure.BackgroundJobs
                 {
                     TimeZone = IndiaTimeZone
                 });
+
+            recurringJobManager.AddOrUpdate<BatchAutoPurgeJob>(
+                "batch-auto-purge",
+                job => job.Execute(),
+                Cron.Daily(5, 0),
+                new RecurringJobOptions
+                {
+                    TimeZone = IndiaTimeZone
+                });
         }
     }
 }

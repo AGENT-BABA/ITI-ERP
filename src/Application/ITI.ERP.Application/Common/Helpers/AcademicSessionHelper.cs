@@ -1,5 +1,6 @@
 using ITI.ERP.Application.Common.Interfaces;
 using ITI.ERP.Domain.Entities;
+using ITI.ERP.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace ITI.ERP.Application.Common.Helpers;
@@ -54,5 +55,27 @@ public static class AcademicSessionHelper
                 .FirstOrDefaultAsync(s => s.Id == requestedSessionId.Value, ct);
 
         return await ResolveActiveSessionEntityAsync(context, currentUserService, ct);
+    }
+
+    public static async Task<List<Guid>> ResolveSessionIdsByYearAsync(
+        string sessionYear,
+        Guid? instituteId,
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService,
+        CancellationToken ct)
+    {
+        var query = context.AcademicSessions
+            .AsNoTracking()
+            .Where(s => s.SessionYear == sessionYear && !s.IsDeleted);
+
+        var isInstituteAdmin = currentUserService.HasRole(RoleConstants.InstituteAdmin)
+            || currentUserService.HasRole(RoleConstants.TradeHead);
+
+        if (isInstituteAdmin && currentUserService.InstituteId.HasValue)
+            query = query.Where(s => s.InstituteId == currentUserService.InstituteId.Value);
+        else if (instituteId.HasValue)
+            query = query.Where(s => s.InstituteId == instituteId.Value);
+
+        return await query.Select(s => s.Id).ToListAsync(ct);
     }
 }

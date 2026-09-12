@@ -7,6 +7,7 @@ interface UseAuthReturn {
   login: (grNumber: string, username: string, password: string) => Promise<boolean>;
   logout: () => void;
   switchSession: (sessionId: string) => Promise<boolean>;
+  switchSessionYear: (year: string, instituteFilterId?: string) => void;
   isSwitchingSession: boolean;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;

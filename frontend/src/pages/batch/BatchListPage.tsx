@@ -22,19 +22,25 @@ import {
   TableRow,
   Typography,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Archive as ArchiveIcon,
+  DeleteForever as DeleteForeverIcon,
   Undo as RestoreIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { z } from 'zod';
 import { PageHeader } from '../../components/common/PageHeader/PageHeader';
 import { FormDialog } from '../../components/common/FormDialog';
-import { ArchiveImpactDialog } from '../../components/common/ArchiveImpactDialog/ArchiveImpactDialog';
 import { PermanentDeleteDialog } from '../../components/common/PermanentDeleteDialog/PermanentDeleteDialog';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -42,14 +48,12 @@ import {
   getBatchById,
   createBatch,
   updateBatch,
-  getBatchArchiveImpact,
-  archiveBatch,
   restoreBatch,
   getBatchDeleteImpact,
-  deleteBatch,
+  permanentDeleteBatch,
+  softDeleteBatch,
   type CreateBatchRequest,
   type UpdateBatchRequest,
-  type BatchArchiveImpact,
   type BatchDeleteImpact,
 } from '../../api/batch.api';
 import { getTrades } from '../../api/trade.api';
@@ -160,6 +164,7 @@ export default function BatchListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [tabValue, setTabValue] = useState<'active' | 'deleted' | 'all'>('active');
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
@@ -171,12 +176,11 @@ export default function BatchListPage() {
 
   const [deleting, setDeleting] = useState(false);
 
-  const [archiveTarget, setArchiveTarget] = useState<Batch | null>(null);
-  const [archiveImpact, setArchiveImpact] = useState<BatchArchiveImpact | null>(null);
-  const [archiving, setArchiving] = useState(false);
-
   const [deleteImpactTarget, setDeleteImpactTarget] = useState<Batch | null>(null);
   const [deleteImpact, setDeleteImpact] = useState<BatchDeleteImpact | null>(null);
+
+  const [softDeleteTarget, setSoftDeleteTarget] = useState<Batch | null>(null);
+  const [softDeleting, setSoftDeleting] = useState(false);
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -185,7 +189,6 @@ export default function BatchListPage() {
   });
 
   const [filterInstituteId, setFilterInstituteId] = useState<string>('');
-  const [filterSessionId, setFilterSessionId] = useState<string>('');
   const [filterTradeId, setFilterTradeId] = useState<string>('');
 
   const [availableInstitutes, setAvailableInstitutes] = useState<Institute[]>([]);
@@ -225,18 +228,7 @@ export default function BatchListPage() {
     }
   }, [isSuperAdmin, formInstituteId, user?.instituteId]);
 
-  const [filterSessions, setFilterSessions] = useState<AcademicSession[]>([]);
   const [filterTrades, setFilterTrades] = useState<Trade[]>([]);
-
-  useEffect(() => {
-    if (isSuperAdmin && filterInstituteId) {
-      getAcademicSessions({ pageNumber: 1, pageSize: 200 })
-        .then((res) => setFilterSessions(res.items.filter((s) => s.instituteId === filterInstituteId)))
-        .catch(() => {});
-    } else {
-      setFilterSessions([]);
-    }
-  }, [isSuperAdmin, filterInstituteId]);
 
   useEffect(() => {
     if (isSuperAdmin && filterInstituteId) {
@@ -261,9 +253,13 @@ export default function BatchListPage() {
         pageSize: 200,
         searchTerm: search || undefined,
       };
-      if (isSuperAdmin && filterInstituteId) params.instituteId = filterInstituteId;
-      if (filterSessionId) params.academicSessionId = filterSessionId;
+      if (isSuperAdmin) {
+        if (user?.sessionYear) params.sessionYear = user.sessionYear;
+        if (filterInstituteId) params.instituteId = filterInstituteId;
+      }
       if (filterTradeId) params.tradeId = filterTradeId;
+      if (tabValue === 'deleted') params.isDeleted = true;
+      else if (tabValue === 'active') params.isDeleted = false;
 
       const result = await getBatches(params as any);
       setData(result.items);
@@ -272,7 +268,7 @@ export default function BatchListPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, isSuperAdmin, filterInstituteId, filterSessionId, filterTradeId]);
+  }, [search, isSuperAdmin, user?.sessionYear, filterInstituteId, filterTradeId, tabValue]);
 
   useEffect(() => {
     fetchData();
@@ -298,7 +294,7 @@ export default function BatchListPage() {
     setFetchingBatch(true);
     setSubmitError(null);
     try {
-      const latest = await getBatchById(batch.id, filterSessionId || undefined);
+      const latest = await getBatchById(batch.id);
       setFormData({
         tradeId: latest.tradeId,
         startAcademicSessionId: latest.startAcademicSessionId,
@@ -384,42 +380,30 @@ export default function BatchListPage() {
     }
   };
 
-  const handleArchiveClick = async (batch: Batch) => {
-    setArchiveTarget(batch);
-    setArchiveImpact(null);
-    try {
-      const impact = await getBatchArchiveImpact(batch.id);
-      setArchiveImpact(impact);
-    } catch (err: any) {
-      const apiError = err.response?.data?.error || 'Failed to load archive impact';
-      setArchiveTarget(null);
-      setSnackbar({ open: true, message: apiError, severity: 'error' });
-    }
+  const handleSoftDeleteClick = (batch: Batch) => {
+    setSoftDeleteTarget(batch);
   };
 
-  const handleArchive = async () => {
-    if (!archiveTarget) return;
-    setArchiving(true);
+  const handleSoftDelete = async () => {
+    if (!softDeleteTarget) return;
+    setSoftDeleting(true);
     try {
-      await archiveBatch(archiveTarget.id);
-      setArchiveTarget(null);
-      setArchiveImpact(null);
-      setSnackbar({ open: true, message: 'Batch archived successfully', severity: 'success' });
+      await softDeleteBatch(softDeleteTarget.id);
+      setSoftDeleteTarget(null);
+      setSnackbar({ open: true, message: 'Batch deleted. It will be permanently removed in 7 days unless restored.', severity: 'success' });
       fetchData();
     } catch (err: any) {
-      const apiError = err.response?.data?.error || 'Failed to archive batch';
-      setArchiveTarget(null);
-      setArchiveImpact(null);
+      const apiError = err.response?.data?.error || 'Failed to delete batch';
+      setSoftDeleteTarget(null);
       setSnackbar({ open: true, message: apiError, severity: 'error' });
     } finally {
-      setArchiving(false);
+      setSoftDeleting(false);
     }
   };
 
-  const handleArchiveClose = () => {
-    if (!archiving) {
-      setArchiveTarget(null);
-      setArchiveImpact(null);
+  const handleSoftDeleteClose = () => {
+    if (!softDeleting) {
+      setSoftDeleteTarget(null);
     }
   };
 
@@ -451,7 +435,7 @@ export default function BatchListPage() {
     if (!deleteImpactTarget) return;
     setDeleting(true);
     try {
-      await deleteBatch(deleteImpactTarget.id);
+      await permanentDeleteBatch(deleteImpactTarget.id);
       setDeleteImpactTarget(null);
       setDeleteImpact(null);
       setSnackbar({ open: true, message: 'Batch permanently deleted', severity: 'success' });
@@ -511,13 +495,23 @@ export default function BatchListPage() {
       <PageHeader
         title="Batches"
         actions={
-          hasPermission('Batch.Create') ? (
+          hasPermission('Batch.Create') && tabValue !== 'deleted' ? (
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
               Add Batch
             </Button>
           ) : undefined
         }
       />
+
+      <Tabs
+        value={tabValue}
+        onChange={(_, newValue) => setTabValue(newValue)}
+        sx={{ mb: 2 }}
+      >
+        <Tab label="Active" value="active" />
+        <Tab label="Deleted" value="deleted" />
+        <Tab label="All" value="all" />
+      </Tabs>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -529,28 +523,19 @@ export default function BatchListPage() {
         {isSuperAdmin && (
           <>
             <Autocomplete
-              options={availableInstitutes}
+              options={[{ id: '', name: 'All Institutes' } as Institute, ...availableInstitutes]}
               getOptionLabel={(option) => option.name}
-              value={availableInstitutes.find((i) => i.id === filterInstituteId) || null}
+              value={availableInstitutes.find((i) => i.id === filterInstituteId) || (filterInstituteId === '' ? { id: '', name: 'All Institutes' } as Institute : null)}
               onChange={(_, newValue) => {
                 setFilterInstituteId(newValue?.id || '');
-                setFilterSessionId('');
                 setFilterTradeId('');
               }}
               sx={{ minWidth: 200 }}
               renderInput={(params) => <TextField {...params} label="Institute" size="small" />}
             />
-            <Autocomplete
-              options={filterSessions}
-              getOptionLabel={(option) => option.sessionYear}
-              value={filterSessions.find((s) => s.id === filterSessionId) || null}
-              onChange={(_, newValue) => {
-                setFilterSessionId(newValue?.id || '');
-                setFilterTradeId('');
-              }}
-              sx={{ minWidth: 160 }}
-              renderInput={(params) => <TextField {...params} label="Session" size="small" />}
-            />
+            {user?.sessionYear && (
+              <Chip label={`Session: ${user.sessionYear}`} color="primary" variant="outlined" sx={{ height: 40 }} />
+            )}
             <Autocomplete
               options={filterTrades}
               getOptionLabel={(option) => `${option.code} - ${option.name}`}
@@ -617,14 +602,25 @@ export default function BatchListPage() {
                           <TableCell sx={{ fontWeight: 600 }}>Year Level</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>Capacity</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                          {tabValue === 'deleted' && (
+                            <TableCell sx={{ fontWeight: 600 }}>Deleted At</TableCell>
+                          )}
+                          {tabValue === 'deleted' && (
+                            <TableCell sx={{ fontWeight: 600 }}>Auto-Purge In</TableCell>
+                          )}
                           {(hasPermission('Batch.Edit') || hasPermission('Batch.Archive')) && (
                             <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
                           )}
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {tradeGroup.batches.map((batch) => (
-                          <TableRow key={batch.id} hover>
+                        {tradeGroup.batches.map((batch) => {
+                          const daysRemaining = batch.deletedAt
+                            ? Math.max(0, 7 - Math.floor((Date.now() - new Date(batch.deletedAt).getTime()) / (1000 * 60 * 60 * 24)))
+                            : null;
+
+                          return (
+                          <TableRow key={batch.id} hover sx={tabValue === 'deleted' ? { opacity: 0.75 } : {}}>
                             <TableCell>{batch.name}</TableCell>
                             <TableCell>{batch.code || '-'}</TableCell>
                             <TableCell>{batch.startSessionYear || '-'}</TableCell>
@@ -645,64 +641,90 @@ export default function BatchListPage() {
                                 : `${batch.studentCount}`}
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                label={batch.isActive ? 'Active' : 'Archived'}
-                                color={batch.isActive ? 'success' : 'default'}
-                                size="small"
-                              />
+                              {tabValue === 'deleted' ? (
+                                <Chip label="Deleted" color="error" size="small" />
+                              ) : (
+                                <Chip
+                                  label={batch.isActive ? 'Active' : 'Archived'}
+                                  color={batch.isActive ? 'success' : 'default'}
+                                  size="small"
+                                />
+                              )}
                             </TableCell>
+                            {tabValue === 'deleted' && (
+                              <TableCell>
+                                {batch.deletedAt ? new Date(batch.deletedAt).toLocaleDateString() : '-'}
+                              </TableCell>
+                            )}
+                            {tabValue === 'deleted' && (
+                              <TableCell>
+                                <Chip
+                                  label={daysRemaining !== null ? `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''}` : '-'}
+                                  color={daysRemaining !== null && daysRemaining <= 2 ? 'error' : 'warning'}
+                                  size="small"
+                                />
+                              </TableCell>
+                            )}
                             {(hasPermission('Batch.Edit') || hasPermission('Batch.Archive')) && (
                               <TableCell>
                                 <Stack direction="row" spacing={0.5}>
-                                  {hasPermission('Batch.Edit') && (
-                                    <Tooltip title="Edit">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => handleOpenEdit(batch)}
-                                        color="primary"
-                                      >
-                                        <EditIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  {hasPermission('Batch.Archive') && batch.isActive && (
-                                    <Tooltip title="Archive Batch">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => handleArchiveClick(batch)}
-                                        color="warning"
-                                      >
-                                        <ArchiveIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  {hasPermission('Batch.Archive') && !batch.isActive && (
-                                    <Tooltip title="Restore Batch">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => handleRestore(batch)}
-                                        color="info"
-                                      >
-                                        <RestoreIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  {isSuperAdmin && hasPermission('Batch.Archive') && (
-                                    <Tooltip title="Permanently Delete">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => handlePermanentDeleteClick(batch)}
-                                        color="error"
-                                      >
-                                        <DeleteIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
+                                  {tabValue === 'deleted' ? (
+                                    <>
+                                      {hasPermission('Batch.Archive') && (
+                                        <Tooltip title="Restore Batch">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => handleRestore(batch)}
+                                            color="info"
+                                          >
+                                            <RestoreIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {hasPermission('Batch.Edit') && (
+                                        <Tooltip title="Edit">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => handleOpenEdit(batch)}
+                                            color="primary"
+                                          >
+                                            <EditIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                      {hasPermission('Batch.Archive') && (
+                                        <Tooltip title="Move to Deleted (recoverable 7 days)">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => handleSoftDeleteClick(batch)}
+                                            color="warning"
+                                          >
+                                            <DeleteIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                      {isSuperAdmin && hasPermission('Batch.Archive') && (
+                                        <Tooltip title="Permanently Delete (irreversible)">
+                                          <IconButton
+                                            size="small"
+                                            onClick={() => handlePermanentDeleteClick(batch)}
+                                            color="error"
+                                          >
+                                            <DeleteForeverIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </>
                                   )}
                                 </Stack>
                               </TableCell>
                             )}
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -844,25 +866,29 @@ export default function BatchListPage() {
         )}
       </FormDialog>
 
-      <ArchiveImpactDialog
-        open={archiveTarget !== null && archiveImpact !== null}
-        onClose={handleArchiveClose}
-        onConfirm={handleArchive}
-        title={`Archive "${archiveTarget?.name}"?`}
-        message="This will deactivate the batch, stopping new admissions. Historical students and data will NOT be deleted."
-        impact={
-          archiveImpact
-            ? {
-                Students: archiveImpact.students,
-                'Attendance Records': archiveImpact.attendanceRecords,
-                'Monthly Practicals': archiveImpact.monthlyPracticals,
-                'Yearly Practicals': archiveImpact.yearlyPracticals,
-                'User Roles': archiveImpact.userRoles,
-              }
-            : {}
-        }
-        loading={archiving}
-      />
+      <Dialog
+        open={softDeleteTarget !== null}
+        onClose={handleSoftDeleteClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Delete "{softDeleteTarget?.name}"?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This batch will be soft-deleted and hidden from the active list.
+            It will be permanently removed in <strong>7 days</strong> unless restored.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 1 }}>
+            Historical student data, attendance, and practical records will be preserved during the recovery period.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleSoftDeleteClose} disabled={softDeleting}>Cancel</Button>
+          <Button onClick={handleSoftDelete} color="error" variant="contained" disabled={softDeleting}>
+            {softDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <PermanentDeleteDialog
         open={deleteImpactTarget !== null && deleteImpact !== null}

@@ -17,7 +17,7 @@ export interface UpdateBatchRequest {
   isActive?: boolean;
 }
 
-export async function getBatches(params: PaginationRequest & { instituteId?: string; tradeId?: string; academicSessionId?: string }): Promise<PaginatedResponse<Batch>> {
+export async function getBatches(params: PaginationRequest & { instituteId?: string; tradeId?: string; academicSessionId?: string; sessionYear?: string; isDeleted?: boolean }): Promise<PaginatedResponse<Batch>> {
   const response = await axiosClient.get<PaginatedResponse<Batch>>('/batches', { params });
   return response.data;
 }
@@ -43,8 +43,12 @@ export async function updateBatch(id: string, data: UpdateBatchRequest): Promise
   return response.data;
 }
 
-export async function deleteBatch(id: string): Promise<void> {
+export async function permanentDeleteBatch(id: string): Promise<void> {
   await axiosClient.delete(`/batches/${id}`);
+}
+
+export async function softDeleteBatch(id: string): Promise<void> {
+  await axiosClient.post(`/batches/${id}/delete`);
 }
 
 export interface BatchArchiveImpact {

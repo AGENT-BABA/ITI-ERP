@@ -17,6 +17,7 @@ public static class UserMapper
         IsActive = u.IsActive,
         IsLocked = u.IsLocked,
         Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList(),
+        RoleIds = u.UserRoles.Select(ur => ur.RoleId).ToList(),
         TradeId = u.UserRoles.FirstOrDefault(ur => ur.TradeId != null)?.TradeId,
         BatchId = u.UserRoles.FirstOrDefault(ur => ur.BatchId != null)?.BatchId,
         BatchName = u.UserRoles.FirstOrDefault(ur => ur.Batch != null)?.Batch?.Name,

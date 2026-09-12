@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -7,6 +7,7 @@ import {
   DialogActions,
   Button,
   Box,
+  TextField,
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorOutlineIcon from '@mui/icons-material/Error';
@@ -15,12 +16,15 @@ import InfoOutlinedIcon from '@mui/icons-material/Info';
 interface ConfirmDialogProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (reason?: string) => void;
   title: string;
   message: string;
   confirmText?: string;
   cancelText?: string;
   severity?: 'info' | 'warning' | 'error';
+  requireReason?: boolean;
+  reasonLabel?: string;
+  loading?: boolean;
 }
 
 const SEVERITY_CONFIG = {
@@ -38,11 +42,25 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   severity = 'info',
+  requireReason = false,
+  reasonLabel = 'Reason',
+  loading = false,
 }) => {
   const config = SEVERITY_CONFIG[severity];
+  const [reason, setReason] = useState('');
+
+  const handleConfirm = () => {
+    onConfirm(requireReason ? reason : undefined);
+    if (requireReason) setReason('');
+  };
+
+  const handleClose = () => {
+    setReason('');
+    onClose();
+  };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth disableRestoreFocus>
+    <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth disableRestoreFocus>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
         <Box sx={{ color: `${config.color}.main`, display: 'flex' }}>
           {config.icon}
@@ -51,11 +69,29 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </DialogTitle>
       <DialogContent>
         <DialogContentText>{message}</DialogContentText>
+        {requireReason && (
+          <TextField
+            autoFocus
+            margin="dense"
+            label={reasonLabel}
+            fullWidth
+            multiline
+            minRows={2}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+        )}
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose}>{cancelText}</Button>
-        <Button variant="contained" color={config.color} onClick={onConfirm}>
-          {confirmText}
+        <Button onClick={handleClose} disabled={loading}>{cancelText}</Button>
+        <Button
+          variant="contained"
+          color={config.color}
+          onClick={handleConfirm}
+          disabled={loading || (requireReason && !reason.trim())}
+        >
+          {loading ? 'Processing...' : confirmText}
         </Button>
       </DialogActions>
     </Dialog>

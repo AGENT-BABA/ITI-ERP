@@ -33,11 +33,13 @@ public class BatchController : BaseApiController
         [FromQuery] Guid? instituteId = null,
         [FromQuery] Guid? tradeId = null,
         [FromQuery] Guid? academicSessionId = null,
+        [FromQuery] string? sessionYear = null,
+        [FromQuery] bool? isDeleted = null,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,
         CancellationToken cancellationToken = default)
     {
-        var result = await _batchService.GetBatchesAsync(instituteId, tradeId, academicSessionId, new PaginationRequest { PageNumber = pageNumber, PageSize = pageSize }, cancellationToken);
+        var result = await _batchService.GetBatchesAsync(instituteId, tradeId, academicSessionId, sessionYear, isDeleted, new PaginationRequest { PageNumber = pageNumber, PageSize = pageSize }, cancellationToken);
         return HandleResult(result);
     }
 
@@ -92,12 +94,23 @@ public class BatchController : BaseApiController
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteBatch(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> PermanentDeleteBatch(Guid id, CancellationToken cancellationToken)
     {
         if (!_currentUserService.HasRole(RoleConstants.Admin))
             return Forbid();
 
         var result = await _batchService.PermanentDeleteBatchAsync(id, cancellationToken);
+        return HandleResult(result);
+    }
+
+    [HttpPost("{id}/delete")]
+    [Authorize(Policy = Permissions.Batch.Archive)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteBatch(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _batchService.DeleteBatchAsync(id, cancellationToken);
         return HandleResult(result);
     }
 

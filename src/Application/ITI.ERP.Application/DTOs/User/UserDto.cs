@@ -11,6 +11,7 @@ public class UserDto
     public string? ProfileImagePath { get; set; }
     public bool IsActive { get; set; }
     public bool IsLocked { get; set; }
+    public List<Guid> RoleIds { get; set; } = new();
     public List<string> Roles { get; set; } = new();
     public Guid? TradeId { get; set; }
     public Guid? BatchId { get; set; }

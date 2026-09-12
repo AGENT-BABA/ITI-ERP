@@ -20,6 +20,9 @@ public class JwtTokenService : IJwtTokenService
 
     public string GenerateAccessToken(User user, List<string> roles, List<string> permissions, Guid? instituteId = null, Guid? academicSessionId = null, Guid? tradeId = null, Guid? batchId = null)
     {
+        if (string.IsNullOrWhiteSpace(_jwtSettings.Secret) || _jwtSettings.Secret.Length < 32)
+            throw new InvalidOperationException("JwtSettings:Secret must be at least 32 characters.");
+
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

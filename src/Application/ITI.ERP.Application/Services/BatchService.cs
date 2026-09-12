@@ -24,7 +24,7 @@ public class BatchService : IBatchService
         _auditService = auditService;
     }
 
-    public async Task<Result<PaginatedList<BatchDto>>> GetBatchesAsync(Guid? instituteId, Guid? tradeId, Guid? academicSessionId, PaginationRequest request, CancellationToken ct)
+    public async Task<Result<PaginatedList<BatchDto>>> GetBatchesAsync(Guid? instituteId, Guid? tradeId, Guid? academicSessionId, string? sessionYear, bool? isDeleted, PaginationRequest request, CancellationToken ct)
     {
         var currentUserInstituteId = _currentUserService.InstituteId;
 
@@ -47,11 +47,15 @@ public class BatchService : IBatchService
             return Result<PaginatedList<BatchDto>>.Failure("Access denied.");
         }
 
-        var query = _context.Batches
+        IQueryable<Batch> baseQuery = _context.Batches
             .AsNoTracking()
             .Include(b => b.Trade)
-            .Include(b => b.StartAcademicSession)
-            .Where(b => !b.IsDeleted);
+            .Include(b => b.StartAcademicSession);
+
+        if (isDeleted == true)
+            baseQuery = baseQuery.IgnoreQueryFilters();
+
+        var query = baseQuery.Where(b => isDeleted == true ? b.IsDeleted : !b.IsDeleted);
 
         if (_currentUserService.HasRole(RoleConstants.Admin))
         {
@@ -65,6 +69,20 @@ public class BatchService : IBatchService
 
         if (tradeId.HasValue)
             query = query.Where(b => b.TradeId == tradeId.Value);
+
+        if (!string.IsNullOrEmpty(sessionYear))
+        {
+            var sessionIds = await AcademicSessionHelper.ResolveSessionIdsByYearAsync(
+                sessionYear, instituteId, _context, _currentUserService, ct);
+            if (sessionIds.Count > 0)
+                query = query.Where(b => sessionIds.Contains(b.StartAcademicSessionId));
+            else
+                query = query.Where(b => false);
+        }
+        else if (academicSessionId.HasValue)
+        {
+            query = query.Where(b => b.StartAcademicSessionId == academicSessionId.Value);
+        }
 
         var totalCount = await query.CountAsync(ct);
 
@@ -364,20 +382,29 @@ public class BatchService : IBatchService
         if (accessCheck is not null)
             return Result.Failure(accessCheck);
 
-        var hasStudents = await _context.Students
-            .AnyAsync(s => s.BatchId == id && !s.IsDeleted, ct);
+        var now = DateTime.UtcNow;
+        var userId = _currentUserService.UserId!.Value;
 
-        if (hasStudents)
-            return Result.Failure("Cannot delete batch with assigned students. Reassign students first.");
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            batch.IsDeleted = true;
+            batch.DeletedAt = now;
+            batch.DeletedBy = userId;
 
-        var hasPracticals = await _context.MonthlyPracticals
-            .AnyAsync(p => p.BatchId == id && !p.IsDeleted, ct);
+            await _context.SaveChangesAsync(ct);
 
-        if (hasPracticals)
-            return Result.Failure("Cannot delete batch with practicals. Remove practicals first.");
-
-        batch.IsDeleted = true;
-        await _context.SaveChangesAsync(ct);
+            await _auditService.LogAsync(AuditAction.Archive, nameof(Batch), batch.Id,
+                new { batch.Name, batch.DeletedAt, DeletedBy = userId },
+                null, ct);
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         return Result.Success();
     }
@@ -458,13 +485,12 @@ public class BatchService : IBatchService
 
     public async Task<Result> RestoreBatchAsync(Guid id, CancellationToken ct)
     {
-        var batch = await _context.Batches.FirstOrDefaultAsync(b => b.Id == id && !b.IsDeleted, ct);
+        var batch = await _context.Batches
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(b => b.Id == id && b.IsDeleted, ct);
 
         if (batch is null)
-            return Result.Failure("Batch not found.");
-
-        if (batch.IsActive)
-            return Result.Failure("Batch is not archived.");
+            return Result.Failure("Deleted batch not found.");
 
         var accessCheck = ValidateBatchAccess(batch);
         if (accessCheck is not null)
@@ -477,13 +503,15 @@ public class BatchService : IBatchService
         await using var transaction = await _context.Database.BeginTransactionAsync(ct);
         try
         {
-            batch.IsActive = true;
+            batch.IsDeleted = false;
+            batch.DeletedAt = null;
+            batch.DeletedBy = null;
 
             await _context.SaveChangesAsync(ct);
 
             await _auditService.LogAsync(AuditAction.Restore, nameof(Batch), batch.Id,
-                new { IsActive = false },
-                new { IsActive = true }, ct);
+                new { batch.Name },
+                new { IsDeleted = false }, ct);
             await _context.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
@@ -577,5 +605,126 @@ public class BatchService : IBatchService
         }
 
         return Result.Success();
+    }
+
+    public async Task<Result<BatchPurgeResultDto>> PermanentDeleteBatchInternalAsync(Guid id, CancellationToken ct)
+    {
+        var batch = await _context.Batches
+            .Include(b => b.StartAcademicSession)
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(b => b.Id == id && b.IsDeleted, ct);
+
+        if (batch is null)
+            return Result<BatchPurgeResultDto>.Failure("Deleted batch not found.");
+
+        var retentionExpiry = DateTime.UtcNow;
+        if (batch.StartAcademicSession.EndDate.AddYears(1) > retentionExpiry)
+        {
+            return Result<BatchPurgeResultDto>.Failure(
+                $"Batch {batch.Name} is still within its retention period " +
+                $"(session ends {batch.StartAcademicSession.EndDate:yyyy-MM-dd}, " +
+                $"retention expires {batch.StartAcademicSession.EndDate.AddYears(1):yyyy-MM-dd}). Skipping.");
+        }
+
+        var result = new BatchPurgeResultDto { BatchName = batch.Name };
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var students = await _context.Students
+                .Where(s => s.BatchId == id && !s.IsDeleted)
+                .Include(s => s.AcademicSession)
+                .ToListAsync(ct);
+
+            foreach (var student in students)
+            {
+                var practicalsDeleted = await _context.PracticalMarks
+                    .Where(m => m.StudentId == student.Id).ExecuteDeleteAsync(ct);
+                var yearlyPracticalsDeleted = await _context.YearlyPracticalMarks
+                    .Where(m => m.StudentId == student.Id).ExecuteDeleteAsync(ct);
+                var attendanceDeleted = await _context.AttendanceRecords
+                    .Where(a => a.StudentId == student.Id).ExecuteDeleteAsync(ct);
+                await _context.Students
+                    .Where(s => s.Id == student.Id).ExecuteDeleteAsync(ct);
+
+                result.StudentsDeleted++;
+            }
+
+            var monthlyPracticals = await _context.MonthlyPracticals
+                .Where(p => p.BatchId == id && !p.IsDeleted)
+                .Include(p => p.AcademicSession)
+                .ToListAsync(ct);
+
+            foreach (var mp in monthlyPracticals)
+            {
+                if (mp.AcademicSession.EndDate.AddYears(1) > retentionExpiry)
+                {
+                    result.MonthlyPracticalsSkipped++;
+                    result.SkipReasons.Add(
+                        $"MonthlyPractical {mp.Name} skipped: session retention not expired " +
+                        $"(expires {mp.AcademicSession.EndDate.AddYears(1):yyyy-MM-dd}).");
+                }
+                else
+                {
+                    await _context.MonthlyPracticals
+                        .Where(p => p.Id == mp.Id).ExecuteDeleteAsync(ct);
+                    result.MonthlyPracticalsDeleted++;
+                }
+            }
+
+            var yearlyPracticals = await _context.YearlyPracticals
+                .Where(p => p.BatchId == id && !p.IsDeleted)
+                .Include(p => p.AcademicSession)
+                .ToListAsync(ct);
+
+            foreach (var yp in yearlyPracticals)
+            {
+                if (yp.AcademicSession.EndDate.AddYears(1) > retentionExpiry)
+                {
+                    result.YearlyPracticalsSkipped++;
+                    result.SkipReasons.Add(
+                        $"YearlyPractical {yp.Name} skipped: session retention not expired " +
+                        $"(expires {yp.AcademicSession.EndDate.AddYears(1):yyyy-MM-dd}).");
+                }
+                else
+                {
+                    await _context.YearlyPracticals
+                        .Where(p => p.Id == yp.Id).ExecuteDeleteAsync(ct);
+                    result.YearlyPracticalsDeleted++;
+                }
+            }
+
+            var userRolesDeleted = await _context.UserRoles
+                .Where(ur => ur.BatchId == id).ExecuteDeleteAsync(ct);
+            result.UserRolesDeleted = userRolesDeleted;
+
+            await _context.Batches
+                .Where(b => b.Id == id).ExecuteDeleteAsync(ct);
+
+            await _context.SaveChangesAsync(ct);
+
+            await _auditService.LogAsync(AuditAction.Delete, nameof(Batch), batch.Id,
+                new
+                {
+                    batch.Name,
+                    result.StudentsDeleted,
+                    result.MonthlyPracticalsDeleted,
+                    result.MonthlyPracticalsSkipped,
+                    result.YearlyPracticalsDeleted,
+                    result.YearlyPracticalsSkipped,
+                    result.UserRolesDeleted,
+                    result.SkipReasons
+                },
+                null, ct);
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+
+        return Result<BatchPurgeResultDto>.Success(result);
     }
 }

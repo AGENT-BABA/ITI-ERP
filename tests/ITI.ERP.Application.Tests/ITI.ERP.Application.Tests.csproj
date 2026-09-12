@@ -14,12 +14,17 @@
     <PackageReference Include="coverlet.collector" Version="6.*" />
     <PackageReference Include="Moq" Version="4.*" />
     <PackageReference Include="FluentAssertions" Version="6.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Application\ITI.ERP.Application\ITI.ERP.Application.csproj" />
     <ProjectReference Include="..\..\src\Domain\ITI.ERP.Domain\ITI.ERP.Domain.csproj" />
     <ProjectReference Include="..\..\src\Shared\ITI.ERP.Shared\ITI.ERP.Shared.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\ITI.ERP.Infrastructure\ITI.ERP.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\API\ITI.ERP.Api\ITI.ERP.Api.csproj" />
   </ItemGroup>
 
 </Project>

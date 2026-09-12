@@ -61,13 +61,13 @@ function toFormData(session: AcademicSession): SessionFormData {
 }
 
 export default function AcademicSessionListPage() {
-  const { hasPermission, isSuperAdmin, switchSession } = useAuth();
+  const { hasPermission, isSuperAdmin, user, switchSession } = useAuth();
 
   const [data, setData] = useState<AcademicSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
 
@@ -80,8 +80,8 @@ export default function AcademicSessionListPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [availableInstitutes, setAvailableInstitutes] = useState<Institute[]>([]);
-  const [selectedInstituteId, setSelectedInstituteId] = useState<string>('');
-
+  const [instituteMap, setInstituteMap] = useState<Map<string, Institute>>(new Map());
+  const [formInstituteId, setFormInstituteId] = useState<string>('');
   const [deleteTarget, setDeleteTarget] = useState<AcademicSession | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -100,7 +100,9 @@ export default function AcademicSessionListPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getAcademicSessions({ pageNumber: page, pageSize, searchTerm: search || undefined });
+      const params: { pageNumber: number; pageSize: number; searchTerm?: string; instituteId?: string } = { pageNumber: page, pageSize, searchTerm: search || undefined };
+      if (isSuperAdmin && user?.instituteFilterId) params.instituteId = user.instituteFilterId;
+      const result = await getAcademicSessions(params);
       setData(result.items);
       setTotal(result.totalCount);
     } catch (err: any) {
@@ -108,7 +110,7 @@ export default function AcademicSessionListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search]);
+  }, [page, pageSize, search, isSuperAdmin, user?.instituteFilterId]);
 
   useEffect(() => {
     fetchData();
@@ -117,7 +119,12 @@ export default function AcademicSessionListPage() {
   useEffect(() => {
     if (isSuperAdmin) {
       getInstitutes({ pageNumber: 1, pageSize: 200 })
-        .then((res) => setAvailableInstitutes(res.items))
+        .then((res) => {
+          setAvailableInstitutes(res.items);
+          const map = new Map<string, Institute>();
+          for (const i of res.items) map.set(i.id, i);
+          setInstituteMap(map);
+        })
         .catch(() => {});
     }
   }, [isSuperAdmin]);
@@ -127,7 +134,6 @@ export default function AcademicSessionListPage() {
     setFormErrors({});
     setSubmitError(null);
     setEditingSession(null);
-    setSelectedInstituteId('');
   };
 
   const handleOpenCreate = () => {
@@ -207,7 +213,7 @@ export default function AcademicSessionListPage() {
         setSnackbar({ open: true, message: 'Academic session updated successfully', severity: 'success' });
       } else {
         const request: CreateAcademicSessionRequest = {
-          instituteId: isSuperAdmin ? selectedInstituteId : undefined,
+          instituteId: isSuperAdmin ? formInstituteId || undefined : undefined,
           sessionYear: result.data.sessionYear.trim(),
           startDate: result.data.startDate,
           endDate: result.data.endDate,
@@ -297,6 +303,7 @@ export default function AcademicSessionListPage() {
 
   const columns: Column<AcademicSession>[] = [
     { id: 'sessionYear', label: 'Session Year', sortable: true },
+    ...(isSuperAdmin ? [{ id: 'instituteName', label: 'Institute', render: (row: AcademicSession) => instituteMap.get(row.instituteId)?.name || '-' }] : []),
     { id: 'startDate', label: 'Start Date', sortable: true, render: (row) => new Date(row.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
     { id: 'endDate', label: 'End Date', render: (row) => new Date(row.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
     {
@@ -378,6 +385,7 @@ export default function AcademicSessionListPage() {
         loading={loading}
         pagination={pagination}
         onPageChange={(p) => setPage(p + 1)}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         searchable
         onSearch={(q) => { setSearch(q); setPage(1); }}
       />
@@ -402,8 +410,8 @@ export default function AcademicSessionListPage() {
               <Autocomplete
                 options={availableInstitutes}
                 getOptionLabel={(option) => option.name}
-                value={availableInstitutes.find((i) => i.id === selectedInstituteId) || null}
-                onChange={(_, newValue) => setSelectedInstituteId(newValue?.id || '')}
+                value={availableInstitutes.find((i) => i.id === formInstituteId) || null}
+                onChange={(_, newValue) => setFormInstituteId(newValue?.id || '')}
                 renderInput={(params) => (
                   <TextField
                     {...params}

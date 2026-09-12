@@ -76,6 +76,11 @@ export async function getStudents(params: PaginationRequest): Promise<PaginatedR
   return response.data;
 }
 
+export async function getArchivedStudents(params: PaginationRequest): Promise<PaginatedResponse<Student>> {
+  const response = await axiosClient.get<PaginatedResponse<Student>>('/students/archived', { params });
+  return response.data;
+}
+
 export async function getStudentById(id: string): Promise<Student> {
   const response = await axiosClient.get<Student>(`/students/${id}`);
   return response.data;
@@ -103,8 +108,12 @@ export async function archiveStudent(id: string, reason: string): Promise<void> 
   await axiosClient.put(`/students/${id}/archive?reason=${encodeURIComponent(reason)}`);
 }
 
-export async function deleteStudent(id: string): Promise<void> {
-  await axiosClient.delete(`/students/${id}`);
+export async function unarchiveStudent(id: string, reason: string): Promise<void> {
+  await axiosClient.post(`/students/${id}/unarchive`, { reason });
+}
+
+export async function deleteStudent(id: string, reason: string): Promise<void> {
+  await axiosClient.delete(`/students/${id}`, { data: { reason } });
 }
 
 export async function uploadStudentPhoto(id: string, file: File): Promise<void> {

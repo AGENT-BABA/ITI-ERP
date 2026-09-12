@@ -25,14 +25,17 @@ public class AcademicSessionService : IAcademicSessionService
         _auditService = auditService;
     }
 
-    public async Task<Result<PaginatedList<AcademicSessionDto>>> GetAcademicSessionsAsync(PaginationRequest request, CancellationToken ct)
+    public async Task<Result<PaginatedList<AcademicSessionDto>>> GetAcademicSessionsAsync(Guid? instituteId, PaginationRequest request, CancellationToken ct)
     {
         var isSuperAdmin = _currentUserService.HasRole(RoleConstants.Admin);
 
         var query = _context.AcademicSessions
             .AsNoTracking();
 
-        if (!isSuperAdmin) query = query.Where(a => a.InstituteId == _currentUserService.InstituteId);
+        if (isSuperAdmin && instituteId.HasValue)
+            query = query.Where(a => a.InstituteId == instituteId.Value);
+        else if (!isSuperAdmin)
+            query = query.Where(a => a.InstituteId == _currentUserService.InstituteId);
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
