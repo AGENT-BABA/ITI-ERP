@@ -82,6 +82,5 @@ appsettings.Production.json
 *.dump
 
 # Docker environment/secrets
-docker/.env.docker
 docker/.env*
 !docker/.env.example
