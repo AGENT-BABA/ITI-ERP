@@ -33,5 +33,12 @@ public class PracticalMarkConfiguration : IEntityTypeConfiguration<PracticalMark
             .WithMany()
             .HasForeignKey(m => m.MarkedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Institute>()
+            .WithMany()
+            .HasForeignKey(m => m.InstituteId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(m => m.InstituteId);
     }
 }

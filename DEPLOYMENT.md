@@ -72,7 +72,7 @@ npm run build
 | `POSTGRES_USER` | DB username | `postgres` |
 | `POSTGRES_PASSWORD` | DB password | **(required)** |
 | `JwtSettings__Secret` | JWT signing key (>=32 chars) | **(required)** |
-| `SeedAdmin__Password` | Initial admin password | `Admin@123` |
+| `SeedAdmin__Password` | Initial admin password | `Set a strong secret during deployment` |
 | `AllowedOrigins` | CORS origins (comma-separated) | none (dev=localhost) |
 
 All ASP.NET Core config values can be overridden with environment variables using `__` separator (e.g., `ConnectionStrings__DefaultConnection`).

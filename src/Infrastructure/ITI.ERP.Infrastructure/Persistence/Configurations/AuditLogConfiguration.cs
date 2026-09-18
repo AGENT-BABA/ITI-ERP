@@ -31,5 +31,6 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(a => new { a.InstituteId, a.Timestamp });
+        builder.HasIndex(a => new { a.EntityName, a.EntityId });
     }
 }

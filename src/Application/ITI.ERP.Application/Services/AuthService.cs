@@ -14,20 +14,24 @@ public class AuthService : IAuthService
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IPasswordHasher _passwordHasher;
 
     public AuthService(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
-        IJwtTokenService jwtTokenService)
+        IJwtTokenService jwtTokenService,
+        IPasswordHasher passwordHasher)
     {
         _context = context;
         _currentUserService = currentUserService;
         _jwtTokenService = jwtTokenService;
+        _passwordHasher = passwordHasher;
     }
 
-    public async Task<Result<LoginResponse>> LoginAsync(LoginRequest request, CancellationToken ct)
+    public async Task<Result<(LoginResponse Response, RefreshTokenResult RefreshToken)>> LoginAsync(LoginRequest request, CancellationToken ct)
     {
         const string SuperAdminGR = "GR0000";
+        const string GenericLoginError = "Incorrect email or password.";
         User? user;
 
         if (string.Equals(request.GRNumber, SuperAdminGR, StringComparison.OrdinalIgnoreCase))
@@ -48,49 +52,69 @@ public class AuthService : IAuthService
             var institute = await _context.Institutes
                 .FirstOrDefaultAsync(i => i.GRNumber == request.GRNumber && i.IsActive, ct);
 
-            if (institute is null)
-                return Result<LoginResponse>.Failure("Invalid GR Number.");
-
-            user = await _context.Users
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Batch)
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .ThenInclude(r => r.RolePermissions)
-                .ThenInclude(rp => rp.Permission)
-                .FirstOrDefaultAsync(u => u.Username == request.Username && u.InstituteId == institute.Id && !u.IsDeleted, ct);
+            user = institute is null
+                ? null
+                : await _context.Users
+                    .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Batch)
+                    .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                    .ThenInclude(r => r.RolePermissions)
+                    .ThenInclude(rp => rp.Permission)
+                    .FirstOrDefaultAsync(u => u.Username == request.Username && u.InstituteId == institute.Id && !u.IsDeleted, ct);
         }
 
-        if (user is null)
-            return Result<LoginResponse>.Failure("Invalid username or password.");
+        var passwordHash = user?.PasswordHash ?? _passwordHasher.HashPassword("dummy_password_for_timing_normalization");
 
-        if (!user.IsActive)
-            return Result<LoginResponse>.Failure("Account is deactivated.");
+        if (user is not null && user.FailedLoginAttempts > 0)
+        {
+            var delayMs = Math.Min(1000 * (int)Math.Pow(2, user.FailedLoginAttempts - 1), 30000);
+            await Task.Delay(delayMs, ct);
+        }
+
+        var passwordValid = user is not null && VerifyPassword(request.Password, user.PasswordHash);
+
+        if (user is null || !user.IsActive || !passwordValid)
+        {
+            if (user is not null)
+            {
+                if (!user.IsActive)
+                {
+                }
+                else
+                {
+                    user.FailedLoginAttempts++;
+                    if (user.FailedLoginAttempts >= 5)
+                    {
+                        user.IsLocked = true;
+                        user.LockedUntil = DateTime.UtcNow.AddMinutes(30);
+                    }
+                    await _context.SaveChangesAsync(ct);
+                }
+            }
+
+            return Result<(LoginResponse Response, RefreshTokenResult RefreshToken)>.Failure(GenericLoginError);
+        }
 
         if (user.IsLocked)
         {
             if (user.LockedUntil.HasValue && user.LockedUntil > DateTime.UtcNow)
-                return Result<LoginResponse>.Failure("Account is locked. Please try again later.");
+            {
+                return Result<(LoginResponse Response, RefreshTokenResult RefreshToken)>.Failure(GenericLoginError);
+            }
 
             user.IsLocked = false;
             user.FailedLoginAttempts = 0;
             user.LockedUntil = null;
         }
 
-        if (!VerifyPassword(request.Password, user.PasswordHash))
-        {
-            user.FailedLoginAttempts++;
-            if (user.FailedLoginAttempts >= 5)
-            {
-                user.IsLocked = true;
-                user.LockedUntil = DateTime.UtcNow.AddMinutes(30);
-            }
-            await _context.SaveChangesAsync(ct);
-            return Result<LoginResponse>.Failure("Invalid username or password.");
-        }
-
         user.FailedLoginAttempts = 0;
         user.LastLoginAt = DateTime.UtcNow;
+
+        if (_passwordHasher.IsRehashNeeded(user.PasswordHash))
+        {
+            user.PasswordHash = _passwordHasher.HashPassword(request.Password);
+        }
 
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
         var permissions = user.UserRoles
@@ -120,30 +144,36 @@ public class AuthService : IAuthService
 
         await _context.SaveChangesAsync(ct);
 
-        return Result<LoginResponse>.Success(new LoginResponse
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken.TokenHash,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60),
-            User = new UserDto
+        return Result<(LoginResponse Response, RefreshTokenResult RefreshToken)>.Success((
+            new LoginResponse
             {
-                Id = user.Id,
-                Username = user.Username,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Phone = user.Phone,
-                ProfileImagePath = user.ProfileImagePath,
-                IsActive = user.IsActive,
-                IsLocked = user.IsLocked,
-                Roles = roles,
-                TradeId = tradeId,
-                LastLoginAt = user.LastLoginAt
+                AccessToken = accessToken,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtTokenService.GetAccessTokenExpiryInMinutes()),
+                User = new UserDto
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    Email = user.Email,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Phone = user.Phone,
+                    ProfileImagePath = user.ProfileImagePath,
+                    IsActive = user.IsActive,
+                    IsLocked = user.IsLocked,
+                    Roles = roles,
+                    TradeId = tradeId,
+                    LastLoginAt = user.LastLoginAt
+                }
+            },
+            new RefreshTokenResult
+            {
+                RawToken = refreshToken.TokenHash,
+                ExpiresAt = refreshToken.ExpiresAt
             }
-        });
+        ));
     }
 
-    public async Task<Result<TokenResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken ct)
+    public async Task<Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken ct)
     {
         var refreshToken = await _context.RefreshTokens
             .Include(rt => rt.User)
@@ -157,7 +187,7 @@ public class AuthService : IAuthService
             .FirstOrDefaultAsync(rt => rt.TokenHash == request.RefreshToken && rt.IsActive, ct);
 
         if (refreshToken is null || refreshToken.ExpiresAt < DateTime.UtcNow)
-            return Result<TokenResponse>.Failure("Invalid or expired refresh token.");
+            return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Failure("Invalid or expired refresh token.");
 
         refreshToken.IsActive = false;
         refreshToken.RevokedAt = DateTime.UtcNow;
@@ -209,12 +239,18 @@ public class AuthService : IAuthService
 
         await _context.SaveChangesAsync(ct);
 
-        return Result<TokenResponse>.Success(new TokenResponse
-        {
-            AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken.TokenHash,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60)
-        });
+        return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Success((
+            new TokenResponse
+            {
+                AccessToken = newAccessToken,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtTokenService.GetAccessTokenExpiryInMinutes())
+            },
+            new RefreshTokenResult
+            {
+                RawToken = newRefreshToken.TokenHash,
+                ExpiresAt = newRefreshToken.ExpiresAt
+            }
+        ));
     }
 
     public async Task<Result> RevokeTokenAsync(RevokeTokenRequest request, CancellationToken ct)
@@ -250,9 +286,9 @@ public class AuthService : IAuthService
         return Result.Success();
     }
 
-    private static bool VerifyPassword(string password, string passwordHash)
+    private bool VerifyPassword(string password, string passwordHash)
     {
-        return BCrypt.Net.BCrypt.Verify(password, passwordHash);
+        return _passwordHasher.VerifyPassword(password, passwordHash);
     }
 
     private static (Guid? instituteId, Guid? tradeId, Guid? batchId) ResolveScope(User user, List<string> roles)
@@ -301,7 +337,7 @@ public class AuthService : IAuthService
             Id = Guid.NewGuid(),
             InstituteId = null,
             Username = request.Username,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password , 12),
+            PasswordHash = _passwordHasher.HashPassword(request.Password),
             Email = request.Email?.Trim(),
             FirstName = request.FirstName?.Trim() ?? "Super",
             LastName = request.LastName?.Trim() ?? "Admin",
@@ -327,17 +363,17 @@ public class AuthService : IAuthService
         return Result.Success();
     }
 
-    public async Task<Result<TokenResponse>> SwitchSessionAsync(Guid sessionId, CancellationToken ct)
+    public async Task<Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>> SwitchSessionAsync(Guid sessionId, CancellationToken ct)
     {
         var userId = _currentUserService.UserId;
         if (userId is null)
-            return Result<TokenResponse>.Failure("User not authenticated.");
+            return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Failure(ErrorMessages.Unauthorized);
 
         var session = await _context.AcademicSessions
             .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, ct);
 
         if (session is null)
-            return Result<TokenResponse>.Failure("Academic session not found.");
+            return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Failure(ErrorMessages.GenericRequestFailed);
 
         var user = await _context.Users
             .Include(u => u.UserRoles)
@@ -349,7 +385,7 @@ public class AuthService : IAuthService
             .FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted, ct);
 
         if (user is null)
-            return Result<TokenResponse>.Failure("User not found.");
+            return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Failure(ErrorMessages.GenericRequestFailed);
 
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
         var permissions = user.UserRoles
@@ -361,7 +397,17 @@ public class AuthService : IAuthService
         var (instituteId, tradeId, batchId) = ResolveScope(user, roles);
 
         if (instituteId.HasValue && session.InstituteId != instituteId.Value)
-            return Result<TokenResponse>.Failure("You are not authorized to access this academic session.");
+            return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Failure(ErrorMessages.GenericRequestFailed);
+
+        var previousTokens = await _context.RefreshTokens
+            .Where(rt => rt.UserId == userId.Value && rt.IsActive)
+            .ToListAsync(ct);
+
+        foreach (var token in previousTokens)
+        {
+            token.IsActive = false;
+            token.RevokedAt = DateTime.UtcNow;
+        }
 
         var newAccessToken = _jwtTokenService.GenerateAccessToken(user, roles, permissions, instituteId, sessionId, tradeId, batchId);
         var newRefreshTokenHash = _jwtTokenService.GenerateRefreshToken();
@@ -377,11 +423,17 @@ public class AuthService : IAuthService
         await _context.RefreshTokens.AddAsync(newRefreshToken, ct);
         await _context.SaveChangesAsync(ct);
 
-        return Result<TokenResponse>.Success(new TokenResponse
-        {
-            AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken.TokenHash,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60)
-        });
+        return Result<(TokenResponse Response, RefreshTokenResult RefreshToken)>.Success((
+            new TokenResponse
+            {
+                AccessToken = newAccessToken,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtTokenService.GetAccessTokenExpiryInMinutes())
+            },
+            new RefreshTokenResult
+            {
+                RawToken = newRefreshToken.TokenHash,
+                ExpiresAt = newRefreshToken.ExpiresAt
+            }
+        ));
     }
 }

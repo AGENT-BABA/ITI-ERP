@@ -4,6 +4,7 @@ import { AuthProvider } from './providers/AuthProvider';
 import { ColorModeProvider } from './providers/ColorModeContext';
 import ThemeProvider from './providers/ThemeProvider';
 import AppRouter from './routes';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,18 +18,20 @@ export const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SnackbarProvider
-        maxSnack={3}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <ColorModeProvider>
-          <ThemeProvider>
-            <AuthProvider>
-              <AppRouter />
-            </AuthProvider>
-          </ThemeProvider>
-        </ColorModeProvider>
-      </SnackbarProvider>
+      <ErrorBoundary>
+        <SnackbarProvider
+          maxSnack={3}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <ColorModeProvider>
+            <ThemeProvider>
+              <AuthProvider>
+                <AppRouter />
+              </AuthProvider>
+            </ThemeProvider>
+          </ColorModeProvider>
+        </SnackbarProvider>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

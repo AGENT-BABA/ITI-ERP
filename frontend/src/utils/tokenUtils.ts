@@ -1,30 +1,20 @@
-import { TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../config';
+import { USER_KEY } from '../config';
 
 const SESSION_YEAR_KEY = 'iti_erp_session_year';
 const INSTITUTE_FILTER_KEY = 'iti_erp_institute_filter';
 
+let accessTokenMemory: string | null = null;
+
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return accessTokenMemory;
 }
 
 export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  accessTokenMemory = token;
 }
 
 export function removeToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
-export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-export function setRefreshToken(token: string): void {
-  localStorage.setItem(REFRESH_TOKEN_KEY, token);
-}
-
-export function removeRefreshToken(): void {
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  accessTokenMemory = null;
 }
 
 export function isTokenExpired(token: string): boolean {
@@ -48,7 +38,6 @@ export function getUserFromToken(): any | null {
 
 export function clearAuthData(): void {
   removeToken();
-  removeRefreshToken();
   localStorage.removeItem(USER_KEY);
 }
 

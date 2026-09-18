@@ -8,7 +8,7 @@ public static class BatchMapper
     public static BatchDto ToDto(this Batch b) => new()
     {
         Id = b.Id,
-        InstituteId = b.InstituteId,
+        InstituteId = b.InstituteId ?? Guid.Empty,
         TradeId = b.TradeId,
         StartAcademicSessionId = b.StartAcademicSessionId,
         StartDate = b.StartDate,

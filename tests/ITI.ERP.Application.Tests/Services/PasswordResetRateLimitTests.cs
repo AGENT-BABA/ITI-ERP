@@ -268,7 +268,15 @@ public class PasswordResetRateLimitTests : IAsyncLifetime
             FrontendBaseUrl = "http://localhost:3000"
         });
 
-        var sut = new UserService(db, currentUserMock.Object, auditMock.Object, emailMock.Object, emailOptions.Object);
+        var passwordHasherMock = new Mock<IPasswordHasher>();
+        passwordHasherMock.Setup(p => p.HashPassword(It.IsAny<string>()))
+            .Returns((string pwd) => BCrypt.Net.BCrypt.HashPassword(pwd, 12));
+        passwordHasherMock.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((string pwd, string hash) => BCrypt.Net.BCrypt.Verify(pwd, hash));
+        passwordHasherMock.Setup(p => p.IsRehashNeeded(It.IsAny<string>()))
+            .Returns(false);
+
+        var sut = new UserService(db, currentUserMock.Object, auditMock.Object, emailMock.Object, emailOptions.Object, passwordHasherMock.Object);
         return (db, sut, emailMock);
     }
 

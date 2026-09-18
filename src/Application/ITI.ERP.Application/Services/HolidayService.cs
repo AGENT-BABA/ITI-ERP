@@ -107,13 +107,25 @@ public class HolidayService : IHolidayService
             Name = request.Name
         };
 
-        await _context.Holidays.AddAsync(holiday, ct);
-        await _context.SaveChangesAsync(ct);
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await _context.Holidays.AddAsync(holiday, ct);
+            await _context.SaveChangesAsync(ct);
 
-        await AutoMarkAttendanceHO(instituteId.Value, academicSessionId.Value, dateOnly, userId!.Value, ct);
+            await AutoMarkAttendanceHO(instituteId.Value, academicSessionId.Value, dateOnly, userId!.Value, ct);
 
-        await _auditService.LogAsync(AuditAction.Create, nameof(Holiday), holiday.Id,
-            new { holiday.Date, holiday.Name }, new { CreatedBy = userId }, ct);
+            await _auditService.LogAsync(AuditAction.Create, nameof(Holiday), holiday.Id,
+                new { holiday.Date, holiday.Name }, new { CreatedBy = userId }, ct);
+
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         return Result<HolidayDto>.Success(new HolidayDto
         {
@@ -165,14 +177,28 @@ public class HolidayService : IHolidayService
 
         var hoRecords = await hoRecordsQuery.ToListAsync(ct);
 
-        if (hoRecords.Count > 0)
-            _context.AttendanceRecords.RemoveRange(hoRecords);
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            holiday.IsDeleted = true;
 
-        await _context.SaveChangesAsync(ct);
+            if (hoRecords.Count > 0)
+                _context.AttendanceRecords.RemoveRange(hoRecords);
 
-        await _auditService.LogAsync(AuditAction.Delete, nameof(Holiday), id,
-            new { holiday.Date, holiday.Name, DeletedHOMarks = hoRecords.Count },
-            new { DeletedBy = userId }, ct);
+            await _context.SaveChangesAsync(ct);
+
+            await _auditService.LogAsync(AuditAction.Delete, nameof(Holiday), id,
+                new { holiday.Date, holiday.Name, DeletedHOMarks = hoRecords.Count },
+                new { DeletedBy = userId }, ct);
+
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
 
         return Result.Success();
     }

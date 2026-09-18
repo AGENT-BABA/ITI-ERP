@@ -21,6 +21,7 @@ public class PasswordResetTests : IDisposable
     private readonly Mock<ICurrentUserService> _currentUserMock;
     private readonly Mock<IAuditService> _auditMock;
     private readonly Mock<IEmailService> _emailMock;
+    private readonly Mock<IPasswordHasher> _passwordHasherMock;
     private readonly UserService _sut;
 
     public PasswordResetTests()
@@ -44,7 +45,15 @@ public class PasswordResetTests : IDisposable
             FrontendBaseUrl = "http://localhost:3000"
         });
 
-        _sut = new UserService(_db, _currentUserMock.Object, _auditMock.Object, _emailMock.Object, emailOptions.Object);
+        _passwordHasherMock = new Mock<IPasswordHasher>();
+        _passwordHasherMock.Setup(p => p.HashPassword(It.IsAny<string>()))
+            .Returns((string pwd) => BCrypt.Net.BCrypt.HashPassword(pwd, 12));
+        _passwordHasherMock.Setup(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((string pwd, string hash) => BCrypt.Net.BCrypt.Verify(pwd, hash));
+        _passwordHasherMock.Setup(p => p.IsRehashNeeded(It.IsAny<string>()))
+            .Returns(false);
+
+        _sut = new UserService(_db, _currentUserMock.Object, _auditMock.Object, _emailMock.Object, emailOptions.Object, _passwordHasherMock.Object);
     }
 
     public void Dispose()

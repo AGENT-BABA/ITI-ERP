@@ -45,6 +45,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Holiday> Holidays => Set<Holiday>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
     public override int SaveChanges()
     {

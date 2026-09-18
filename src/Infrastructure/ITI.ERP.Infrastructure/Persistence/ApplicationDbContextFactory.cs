@@ -10,8 +10,8 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         var connectionString = Environment.GetEnvironmentVariable(
-            "ConnectionStrings__DefaultConnection ")
-            ?? "Host=localhost;Port=5432;Database=iti_erp;Username=postgres;Password=PASS_DB_NEW";
+            "ConnectionStrings__DefaultConnection")
+            ?? "Host=localhost;Port=5432;Database=iti_erp;Username=postgres;Password=Imp2026@ERP";
         optionsBuilder.UseNpgsql(connectionString);
 
         return new ApplicationDbContext(optionsBuilder.Options, null!, null!);

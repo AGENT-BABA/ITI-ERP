@@ -212,6 +212,8 @@ namespace ITI.ERP.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("EntityName", "EntityId");
+
                     b.HasIndex("InstituteId", "Timestamp");
 
                     b.ToTable("AuditLogs");
@@ -271,6 +273,12 @@ namespace ITI.ERP.Infrastructure.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InstituteId");
@@ -286,6 +294,45 @@ namespace ITI.ERP.Infrastructure.Migrations
                         .HasFilter("\"Code\" IS NOT NULL AND \"IsDeleted\" = false");
 
                     b.ToTable("Batches");
+                });
+
+            modelBuilder.Entity("ITI.ERP.Domain.Entities.ExternalLogin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ExternalUserId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Provider", "ExternalUserId")
+                        .IsUnique();
+
+                    b.ToTable("ExternalLogins");
                 });
 
             modelBuilder.Entity("ITI.ERP.Domain.Entities.Holiday", b =>
@@ -728,6 +775,8 @@ namespace ITI.ERP.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InstituteId");
 
                     b.HasIndex("MarkedBy");
 
@@ -1588,6 +1637,8 @@ namespace ITI.ERP.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("InstituteId");
+
                     b.HasIndex("MarkedBy");
 
                     b.HasIndex("StudentId");
@@ -1703,6 +1754,17 @@ namespace ITI.ERP.Infrastructure.Migrations
                     b.Navigation("Trade");
                 });
 
+            modelBuilder.Entity("ITI.ERP.Domain.Entities.ExternalLogin", b =>
+                {
+                    b.HasOne("ITI.ERP.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ITI.ERP.Domain.Entities.Holiday", b =>
                 {
                     b.HasOne("ITI.ERP.Domain.Entities.AcademicSession", "AcademicSession")
@@ -1794,6 +1856,12 @@ namespace ITI.ERP.Infrastructure.Migrations
 
             modelBuilder.Entity("ITI.ERP.Domain.Entities.PracticalMark", b =>
                 {
+                    b.HasOne("ITI.ERP.Domain.Entities.Institute", null)
+                        .WithMany()
+                        .HasForeignKey("InstituteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ITI.ERP.Domain.Entities.User", "MarkedByUser")
                         .WithMany()
                         .HasForeignKey("MarkedBy")
@@ -2065,6 +2133,12 @@ namespace ITI.ERP.Infrastructure.Migrations
 
             modelBuilder.Entity("ITI.ERP.Domain.Entities.YearlyPracticalMark", b =>
                 {
+                    b.HasOne("ITI.ERP.Domain.Entities.Institute", null)
+                        .WithMany()
+                        .HasForeignKey("InstituteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ITI.ERP.Domain.Entities.User", "MarkedByUser")
                         .WithMany()
                         .HasForeignKey("MarkedBy")

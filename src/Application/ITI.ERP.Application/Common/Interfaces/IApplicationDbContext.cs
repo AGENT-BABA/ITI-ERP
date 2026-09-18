@@ -1,5 +1,6 @@
 using ITI.ERP.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace ITI.ERP.Application.Common.Interfaces;
@@ -28,8 +29,10 @@ public interface IApplicationDbContext
     DbSet<Holiday> Holidays { get; }
     DbSet<Batch> Batches { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
+    DbSet<ExternalLogin> ExternalLogins { get; }
 
     DatabaseFacade Database { get; }
+    ChangeTracker ChangeTracker { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

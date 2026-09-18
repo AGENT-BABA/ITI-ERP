@@ -282,7 +282,7 @@ public class TradeService : ITradeService
         else
             query = query.Where(t => !t.IsDeleted);
 
-        var trades = await query.OrderBy(t => t.Name).ToListAsync(ct);
+        var trades = await query.OrderBy(t => t.Name).Take(10000).ToListAsync(ct);
 
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Trades");

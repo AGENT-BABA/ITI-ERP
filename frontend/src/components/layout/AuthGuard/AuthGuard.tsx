@@ -1,16 +1,26 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getToken } from '../../../utils/tokenUtils';
+import { useAuth } from '../../../hooks/useAuth';
+import CircularProgress from '@mui/material/CircularProgress';
+import Box from '@mui/material/Box';
 
 interface AuthGuardProps {
   children: React.ReactNode;
 }
 
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
-  const token = getToken();
+  const { user, isLoading } = useAuth();
   const location = useLocation();
 
-  if (!token) {
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

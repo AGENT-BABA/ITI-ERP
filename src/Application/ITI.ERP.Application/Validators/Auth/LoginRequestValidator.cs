@@ -9,14 +9,16 @@ public class LoginRequestValidator : AbstractValidator<LoginRequest>
     {
         RuleFor(x => x.GRNumber)
             .NotEmpty()
-            .Length(1, 10);
+            .Matches(@"^[A-Za-z0-9]{1,10}$")
+            .WithMessage("GR Number must be alphanumeric.");
 
         RuleFor(x => x.Username)
             .NotEmpty()
-            .Length(1, 50);
+            .Matches(@"^[a-zA-Z0-9._@-]{3,50}$")
+            .WithMessage("Username must be alphanumeric.");
 
         RuleFor(x => x.Password)
             .NotEmpty()
-            .Length(6, 100);
+            .Length(8, 128);
     }
 }

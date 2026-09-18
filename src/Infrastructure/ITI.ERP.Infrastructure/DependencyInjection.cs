@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IExternalAuthService, ExternalAuthService>();
         services.AddScoped<ITradeMasterService, TradeMasterService>();
         services.AddScoped<IStudentImportService, StudentImportService>();
         services.AddScoped<IHolidayService, HolidayService>();

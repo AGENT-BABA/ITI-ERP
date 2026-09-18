@@ -335,6 +335,8 @@ public class PracticalService : IPracticalService
 
         await _auditService.LogAsync(AuditAction.Create, nameof(MonthlyPractical), practical.Id, null, practical, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         practical = await _context.MonthlyPracticals
             .AsNoTracking()
             .Include(p => p.Trade)
@@ -401,6 +403,8 @@ public class PracticalService : IPracticalService
 
         await _auditService.LogAsync(AuditAction.Update, nameof(MonthlyPractical), practical.Id, oldValues, practical, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         var passMarks = await GetPassMarksAsync(ct);
 
         return Result<MonthlyPracticalDto>.Success(new MonthlyPracticalDto
@@ -465,6 +469,8 @@ public class PracticalService : IPracticalService
 
         await _auditService.LogAsync(AuditAction.Delete, nameof(MonthlyPractical), practical.Id,
             new { practical.Name, practical.Month, practical.Year }, null, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result.Success();
     }
@@ -679,6 +685,8 @@ public class PracticalService : IPracticalService
             new { MonthlyPracticalId = request.MonthlyPracticalId, StudentCount = request.Students.Count },
             new { MarkedBy = userId }, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result.Success();
     }
 
@@ -717,6 +725,8 @@ public class PracticalService : IPracticalService
         await _auditService.LogAsync(AuditAction.DraftLock, nameof(MonthlyPractical), practical.Id,
             null, null, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result.Success();
     }
 
@@ -753,6 +763,8 @@ public class PracticalService : IPracticalService
 
         await _auditService.LogAsync(AuditAction.DraftUnlock, nameof(MonthlyPractical), practical.Id,
             new { reason }, null, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result.Success();
     }

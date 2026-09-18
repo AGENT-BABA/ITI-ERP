@@ -4,6 +4,7 @@ import { AuthContext, type User } from '../providers/AuthProvider';
 interface UseAuthReturn {
   user: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (grNumber: string, username: string, password: string) => Promise<boolean>;
   logout: () => void;
   switchSession: (sessionId: string) => Promise<boolean>;

@@ -111,6 +111,8 @@ public class InstituteService : IInstituteService
 
         await _auditService.LogAsync(Domain.Enums.AuditAction.Create, nameof(Institute), institute.Id, null, institute, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result<InstituteDto>.Success(new InstituteDto
         {
             Id = institute.Id,
@@ -166,6 +168,8 @@ public class InstituteService : IInstituteService
         await _context.SaveChangesAsync(ct);
 
         await _auditService.LogAsync(Domain.Enums.AuditAction.Update, nameof(Institute), institute.Id, oldValues, institute, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result<InstituteDto>.Success(new InstituteDto
         {

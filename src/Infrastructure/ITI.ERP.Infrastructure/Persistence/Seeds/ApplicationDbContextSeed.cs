@@ -235,7 +235,17 @@ public static class ApplicationDbContextSeed
                 Permissions.AcademicSession.Edit,
                 Permissions.AcademicSession.Delete,
                 Permissions.AcademicSession.Lock,
-                Permissions.AcademicSession.Activate
+                Permissions.AcademicSession.Activate,
+                Permissions.Attendance.View,
+                Permissions.Attendance.Mark,
+                Permissions.Attendance.Export,
+                Permissions.Practical.View,
+                Permissions.Practical.Create,
+                Permissions.Practical.Edit,
+                Permissions.Practical.Lock,
+                Permissions.Practical.Unlock,
+                Permissions.Practical.Delete,
+                Permissions.Trade.Archive
             };
 
             var instituteAdminTargetIds = new HashSet<Guid>(

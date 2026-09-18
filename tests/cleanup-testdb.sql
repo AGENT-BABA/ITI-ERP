@@ -1,0 +1,24 @@
+-- Clean data respecting FK constraints (leaf tables first)
+DELETE FROM "AuditLogs";
+DELETE FROM "RefreshTokens";
+DELETE FROM "PasswordResetTokens";
+DELETE FROM "PracticalMarks";
+DELETE FROM "YearlyPracticalMarks";
+DELETE FROM "MonthlyPracticals";
+DELETE FROM "YearlyPracticals";
+DELETE FROM "AttendanceRecords";
+DELETE FROM "StudentImportHistories";
+DELETE FROM "TradeImportHistories";
+DELETE FROM "Students";
+DELETE FROM "UserRoles";
+DELETE FROM "RolePermissions";
+DELETE FROM "InstituteSettings";
+DELETE FROM "Holidays";
+DELETE FROM "Batches";
+DELETE FROM "Trades";
+DELETE FROM "Users";
+DELETE FROM "AcademicSessions";
+DELETE FROM "Institutes";
+DELETE FROM "Permissions";
+DELETE FROM "Roles";
+SELECT 'Cleanup complete' as status;

@@ -305,6 +305,8 @@ public class YearlyPracticalService : IYearlyPracticalService
 
         await _auditService.LogAsync(AuditAction.Create, nameof(YearlyPractical), practical.Id, null, practical, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         practical = await _context.YearlyPracticals
             .AsNoTracking()
             .Include(p => p.Trade)
@@ -363,6 +365,8 @@ public class YearlyPracticalService : IYearlyPracticalService
         await _context.SaveChangesAsync(ct);
 
         await _auditService.LogAsync(AuditAction.Update, nameof(YearlyPractical), practical.Id, oldValues, practical, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         var passMarks = await GetPassMarksAsync(ct);
 
@@ -423,6 +427,8 @@ public class YearlyPracticalService : IYearlyPracticalService
 
         await _auditService.LogAsync(AuditAction.Delete, nameof(YearlyPractical), practical.Id,
             new { practical.Name, practical.Year }, null, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result.Success();
     }
@@ -573,6 +579,8 @@ public class YearlyPracticalService : IYearlyPracticalService
         await _auditService.LogAsync(AuditAction.DraftLock, nameof(YearlyPractical), practical.Id,
             null, null, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result.Success();
     }
 
@@ -608,6 +616,8 @@ public class YearlyPracticalService : IYearlyPracticalService
 
         await _auditService.LogAsync(AuditAction.DraftUnlock, nameof(YearlyPractical), practical.Id,
             new { reason }, null, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result.Success();
     }

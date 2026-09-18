@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using ITI.ERP.Domain.Common;
 using ITI.ERP.Domain.Enums;
 
@@ -5,7 +6,6 @@ namespace ITI.ERP.Domain.Entities;
 
 public class Batch : SoftDeletableEntity
 {
-    public new Guid InstituteId { get; set; }
     public Guid TradeId { get; set; }
     public Guid StartAcademicSessionId { get; set; }
     public DateTime StartDate { get; set; }
@@ -15,6 +15,9 @@ public class Batch : SoftDeletableEntity
     public bool IsActive { get; set; } = true;
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
+
+    [Timestamp]
+    public uint Version { get; set; }
 
     public Institute Institute { get; set; } = null!;
     public Trade Trade { get; set; } = null!;

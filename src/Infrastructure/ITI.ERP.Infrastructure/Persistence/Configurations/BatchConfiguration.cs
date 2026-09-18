@@ -48,5 +48,7 @@ public class BatchConfiguration : IEntityTypeConfiguration<Batch>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(b => !b.IsDeleted);
+
+        builder.Property(b => b.Version).IsRowVersion();
     }
 }

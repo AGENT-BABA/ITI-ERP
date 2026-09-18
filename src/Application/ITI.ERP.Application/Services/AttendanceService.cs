@@ -549,6 +549,8 @@ public class AttendanceService : IAttendanceService
             new { TradeId = request.TradeId, Date = dateOnly, StudentCount = request.Students.Count },
             new { MarkedBy = userId }, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result.Success();
     }
 
@@ -597,6 +599,8 @@ public class AttendanceService : IAttendanceService
         await _auditService.LogAsync(AuditAction.DraftLock, nameof(AttendanceRecord), null,
             new { TradeId = tradeId, Date = dateOnly, RecordCount = records.Count }, null, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result.Success();
     }
 
@@ -643,6 +647,8 @@ public class AttendanceService : IAttendanceService
 
         await _auditService.LogAsync(AuditAction.DraftUnlock, nameof(AttendanceRecord), null,
             new { TradeId = tradeId, Date = dateOnly, RecordCount = records.Count, reason }, null, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result.Success();
     }

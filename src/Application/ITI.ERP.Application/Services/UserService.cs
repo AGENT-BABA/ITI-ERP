@@ -22,19 +22,22 @@ public class UserService : IUserService
     private readonly IAuditService _auditService;
     private readonly IEmailService _emailService;
     private readonly EmailOptions _emailOptions;
+    private readonly IPasswordHasher _passwordHasher;
 
     public UserService(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
         IAuditService auditService,
         IEmailService emailService,
-        IOptions<EmailOptions> emailOptions)
+        IOptions<EmailOptions> emailOptions,
+        IPasswordHasher passwordHasher)
     {
         _context = context;
         _currentUserService = currentUserService;
         _auditService = auditService;
         _emailService = emailService;
         _emailOptions = emailOptions.Value;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<Result<PaginatedList<UserDto>>> GetUsersAsync(PaginationRequest request, CancellationToken ct)
@@ -203,7 +206,7 @@ public class UserService : IUserService
             InstituteId = instituteId,
             Username = request.Username,
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password , 12),
+            PasswordHash = _passwordHasher.HashPassword(request.Password),
             FirstName = request.FirstName,
             LastName = request.LastName,
             Phone = request.Phone,
@@ -428,6 +431,8 @@ public class UserService : IUserService
 
         await _auditService.LogAsync(Domain.Enums.AuditAction.Update, nameof(User), user.Id, new { IsActive = oldStatus }, new { IsActive = user.IsActive }, ct);
 
+        await _context.SaveChangesAsync(ct);
+
         return Result.Success();
     }
 
@@ -484,7 +489,7 @@ public class UserService : IUserService
             .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
 
         if (resetToken is null || resetToken.UsedAt.HasValue || resetToken.ExpiresAt < DateTime.UtcNow)
-            return Result.Failure("Invalid or expired reset token.");
+            return Result.Failure(ErrorMessages.InvalidOrExpiredToken);
 
         return Result.Success();
     }
@@ -502,7 +507,7 @@ public class UserService : IUserService
             if (resetToken is null || resetToken.UsedAt.HasValue || resetToken.ExpiresAt < DateTime.UtcNow)
             {
                 await transaction.RollbackAsync(ct);
-                return Result.Failure("Invalid or expired reset token.");
+                return Result.Failure(ErrorMessages.InvalidOrExpiredToken);
             }
 
             var markedCount = await _context.PasswordResetTokens
@@ -513,7 +518,7 @@ public class UserService : IUserService
             if (markedCount == 0)
             {
                 await transaction.RollbackAsync(ct);
-                return Result.Failure("Invalid or expired reset token.");
+                return Result.Failure(ErrorMessages.InvalidOrExpiredToken);
             }
 
             var user = await _context.Users
@@ -522,10 +527,10 @@ public class UserService : IUserService
             if (user is null)
             {
                 await transaction.RollbackAsync(ct);
-                return Result.Failure("User not found.");
+                return Result.Failure(ErrorMessages.InvalidOrExpiredToken);
             }
 
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword , 12);
+            user.PasswordHash = _passwordHasher.HashPassword(newPassword);
             user.FailedLoginAttempts = 0;
             user.IsLocked = false;
             user.LockedUntil = null;
@@ -652,6 +657,8 @@ public class UserService : IUserService
         await _context.SaveChangesAsync(ct);
 
         await _auditService.LogAsync(Domain.Enums.AuditAction.Update, nameof(User), user.Id, new { IsLocked = true }, new { IsLocked = false }, ct);
+
+        await _context.SaveChangesAsync(ct);
 
         return Result.Success();
     }

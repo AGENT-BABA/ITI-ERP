@@ -10,7 +10,7 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
         RuleFor(x => x.Username)
             .NotEmpty()
             .Length(3, 50)
-            .Matches(@"^[a-zA-Z0-9]+$")
+            .Matches(@"^[a-zA-Z0-9._@-]+$")
             .WithMessage("Username must be alphanumeric.");
 
         RuleFor(x => x.Email)
@@ -22,7 +22,7 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
 
         RuleFor(x => x.Password)
             .NotEmpty()
-            .Length(6, 100)
+            .Length(8, 128)
             .Matches(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]+$")
             .WithMessage("Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character.");
 

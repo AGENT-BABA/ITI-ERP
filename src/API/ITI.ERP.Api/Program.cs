@@ -138,6 +138,13 @@ try
                 return Task.CompletedTask;
             }
         };
+    })
+    .AddGoogle(options =>
+    {
+        options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? string.Empty;
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? string.Empty;
+        options.CallbackPath = "/api/v1/auth/google-callback";
+        options.SaveTokens = false;
     });
 
     builder.Services.AddAuthorization(options =>
@@ -184,7 +191,8 @@ try
             options.AddPolicy("AllowFrontend", policy =>
                 policy.SetIsOriginAllowed(_ => true)
                       .AllowAnyHeader()
-                      .AllowAnyMethod());
+                      .AllowAnyMethod()
+                      .AllowCredentials());
         });
     }
     else
@@ -196,7 +204,30 @@ try
         {
             var envOrigins = Environment.GetEnvironmentVariable("AllowedOrigins");
             if (!string.IsNullOrWhiteSpace(envOrigins))
+            {
                 allowedOrigins = envOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            }
+            else
+            {
+                var origins = new List<string>();
+                for (int i = 0; ; i++)
+                {
+                    var value = Environment.GetEnvironmentVariable($"AllowedOrigins__{i}");
+                    if (string.IsNullOrWhiteSpace(value))
+                        break;
+                    origins.Add(value);
+                }
+                if (origins.Count > 0)
+                    allowedOrigins = origins.ToArray();
+            }
+        }
+
+        if (allowedOrigins.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "CORS AllowedOrigins must be configured for Production. " +
+                "Set 'AllowedOrigins' in appsettings.Production.json or via environment variable " +
+                "(comma-separated or indexed: AllowedOrigins__0, AllowedOrigins__1, ...).");
         }
 
         builder.Services.AddCors(options =>
@@ -362,7 +393,19 @@ try
     app.UseMiddleware<GlobalExceptionMiddleware>();
     app.UseMiddleware<RequestLoggingMiddleware>();
 
-    app.UseHttpsRedirection();
+    app.Use(async (context, next) =>
+    {
+        context.Response.Headers.Append("X-Frame-Options", "DENY");
+        context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+        context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+        await next();
+    });
+
+    // HSTS: Enable after HTTPS is configured in nginx with real SSL certificates.
+    // app.UseHsts();
+    // HTTPS Redirect: Enable after HTTPS is configured. Currently broken without HTTPS —
+    // middleware redirects HTTP→HTTPS but no HTTPS listener exists, causing 307 to dead endpoint.
+    // app.UseHttpsRedirection();
     app.UseResponseCompression();
     app.UseCors("AllowFrontend");
 

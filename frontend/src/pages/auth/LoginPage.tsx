@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,8 +11,10 @@ import {
   Alert,
   Stack,
   Link,
+  Divider,
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
+import { API_BASE_URL } from '../../config';
 
 const loginSchema = z.object({
   grNumber: z.string().min(1, 'GR Number is required'),
@@ -64,8 +66,12 @@ const textFieldSx = {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [error, setError] = useState('');
+
+  const urlError = searchParams.get('error');
+  const displayError = error || urlError || '';
 
   const {
     register,
@@ -169,7 +175,7 @@ export default function LoginPage() {
           Industrial Training Institute Management System
         </Typography>
 
-        {error && (
+        {displayError && (
           <Alert
             severity="error"
             sx={{
@@ -180,7 +186,7 @@ export default function LoginPage() {
               '& .MuiAlert-icon': { color: '#fca5a5' },
             }}
           >
-            {error}
+            {displayError}
           </Alert>
         )}
 
@@ -233,6 +239,40 @@ export default function LoginPage() {
             >
               {isSubmitting ? 'Logging in...' : 'Sign In'}
             </Button>
+
+            <Divider sx={{ color: 'rgba(255,255,255,0.3)', '&::before, &::after': { borderColor: 'rgba(255,255,255,0.15)' } }}>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', px: 1 }}>OR</Typography>
+            </Divider>
+
+            <Button
+              variant="outlined"
+              fullWidth
+              size="large"
+              onClick={() => { window.location.href = `${API_BASE_URL}/auth/external/google`; }}
+              sx={{
+                py: 1.5,
+                fontWeight: 600,
+                borderRadius: 2,
+                textTransform: 'none',
+                fontSize: '0.95rem',
+                borderColor: 'rgba(255,255,255,0.25)',
+                color: '#fff',
+                bgcolor: 'rgba(255,255,255,0.05)',
+                '&:hover': {
+                  borderColor: 'rgba(255,255,255,0.4)',
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <Box
+                component="img"
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                alt="Google"
+                sx={{ width: 20, height: 20, mr: 1.5 }}
+              />
+              Sign in with Google
+            </Button>
+
             <Box sx={{ textAlign: 'center', mt: 1 }}>
               <Link
                 component={RouterLink}

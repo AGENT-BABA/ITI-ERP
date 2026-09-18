@@ -73,4 +73,6 @@ public class JwtTokenService : IJwtTokenService
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
     }
+
+    public int GetAccessTokenExpiryInMinutes() => _jwtSettings.ExpiryInMinutes;
 }

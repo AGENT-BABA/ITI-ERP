@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { getToken, setToken, removeToken, getRefreshToken, setRefreshToken, removeRefreshToken, getAcademicSessionIdFromToken } from '../utils/tokenUtils';
+import { getToken, setToken, removeToken, getAcademicSessionIdFromToken } from '../utils/tokenUtils';
 import { refreshToken as callRefreshToken } from './auth.api';
 
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -43,7 +44,7 @@ axiosClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh-token')) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -58,29 +59,15 @@ axiosClient.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const currentRefreshToken = getRefreshToken();
-      if (!currentRefreshToken) {
-        removeToken();
-        removeRefreshToken();
-        window.location.href = '/login';
-        isRefreshing = false;
-        return Promise.reject(error);
-      }
-
       try {
         const currentToken = getToken();
         const currentSessionId = currentToken ? getAcademicSessionIdFromToken(currentToken) : undefined;
         const response = await callRefreshToken({
-          refreshToken: currentRefreshToken,
           academicSessionId: currentSessionId,
         });
         const newToken = response.accessToken;
         setToken(newToken);
-        if (response.refreshToken) {
-          setRefreshToken(response.refreshToken);
-        }
 
-        // Update user state in localStorage with new session
         try {
           const stored = localStorage.getItem('iti_erp_user');
           if (stored) {
@@ -96,7 +83,6 @@ axiosClient.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         removeToken();
-        removeRefreshToken();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {

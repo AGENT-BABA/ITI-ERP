@@ -6,7 +6,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
-  refreshToken: string;
   expiresAt: string;
   user: {
     id: string;
@@ -20,12 +19,10 @@ export interface LoginResponse {
 }
 
 export interface RefreshTokenRequest {
-  refreshToken: string;
   academicSessionId?: string;
 }
 
 export interface TokenResponse {
   accessToken: string;
-  refreshToken: string;
   expiresAt: string;
 }

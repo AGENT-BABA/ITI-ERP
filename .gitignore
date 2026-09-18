@@ -63,3 +63,25 @@ coverage/
 #Secrets
 appsettings.json
 appsettings.Production.json
+
+# User Secrets
+**/secrets.json
+**/appsettings.*.local.json
+
+# Certificates / keys
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Local database / backups
+*.db
+*.db-shm
+*.db-wal
+*.bak
+*.dump
+
+# Docker environment/secrets
+docker/.env.docker
+docker/.env*
+!docker/.env.example

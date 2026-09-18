@@ -1,3 +1,4 @@
+using System.Data;
 using ITI.ERP.Application.Common.Helpers;
 using ITI.ERP.Application.Common.Interfaces;
 using ITI.ERP.Application.Common.Mappers;
@@ -8,6 +9,7 @@ using ITI.ERP.Domain.Entities;
 using ITI.ERP.Domain.Enums;
 using ITI.ERP.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace ITI.ERP.Application.Services;
 
@@ -241,50 +243,68 @@ public class BatchService : IBatchService
         if (duplicateExists)
             return Result<BatchDto>.Failure("A batch with this name already exists for this trade and session.");
 
-        if (request.Capacity.HasValue && trade.TotalSeats > 0)
+        const int maxRetries = 3;
+        for (int attempt = 0; ; attempt++)
         {
-            var existingCapacitySum = await _context.Batches
-                .Where(b => b.TradeId == request.TradeId
-                    && b.StartAcademicSessionId == request.StartAcademicSessionId
-                    && !b.IsDeleted
-                    && b.Capacity.HasValue)
-                .SumAsync(b => b.Capacity!.Value, ct);
-
-            var remaining = trade.TotalSeats - existingCapacitySum;
-            if (request.Capacity.Value > remaining)
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+            try
             {
-                return Result<BatchDto>.Failure(
-                    $"Only {remaining} seat{(remaining != 1 ? "s" : "")} available for this trade. " +
-                    $"Batch capacity of {request.Capacity.Value} exceeds the remaining seats. " +
-                    $"Trade total: {trade.TotalSeats}, already allocated: {existingCapacitySum}.");
+                if (request.Capacity.HasValue && trade.TotalSeats > 0)
+                {
+                    var existingCapacitySum = await _context.Batches
+                        .Where(b => b.TradeId == request.TradeId
+                            && b.StartAcademicSessionId == request.StartAcademicSessionId
+                            && !b.IsDeleted
+                            && b.Capacity.HasValue)
+                        .SumAsync(b => b.Capacity!.Value, ct);
+
+                    var remaining = trade.TotalSeats - existingCapacitySum;
+                    if (request.Capacity.Value > remaining)
+                    {
+                        await transaction.RollbackAsync(ct);
+                        return Result<BatchDto>.Failure(
+                            $"Only {remaining} seat{(remaining != 1 ? "s" : "")} available for this trade. " +
+                            $"Batch capacity of {request.Capacity.Value} exceeds the remaining seats. " +
+                            $"Trade total: {trade.TotalSeats}, already allocated: {existingCapacitySum}.");
+                    }
+                }
+
+                var batch = new Batch
+                {
+                    InstituteId = instituteId.Value,
+                    TradeId = request.TradeId,
+                    StartAcademicSessionId = request.StartAcademicSessionId,
+                    StartDate = request.StartDate,
+                    Name = request.Name.Trim(),
+                    Code = request.Code?.Trim(),
+                    Capacity = request.Capacity,
+                    IsActive = true
+                };
+
+                await _context.Batches.AddAsync(batch, ct);
+                await _context.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+
+                batch.Trade = trade;
+                batch.StartAcademicSession = academicSession;
+
+                var dto = batch.ToDto();
+                var calcResult = BatchYearLevelCalculator.Calculate(batch, trade, academicSession);
+                dto.ComputedStatus = calcResult.Status;
+                dto.ComputedYearLevel = calcResult.YearLevel.HasValue ? (int)calcResult.YearLevel.Value : null;
+                dto.ComputedYearLevelLabel = calcResult.Label;
+
+                return Result<BatchDto>.Success(dto);
+            }
+            catch (Exception ex) when (IsPostgresSerializationFailure(ex) && attempt < maxRetries)
+            {
+                await transaction.RollbackAsync(ct);
+                _context.ChangeTracker.Clear();
+                var delay = TimeSpan.FromMilliseconds(100 * Math.Pow(2, attempt))
+                    + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 50));
+                await Task.Delay(delay, ct);
             }
         }
-
-        var batch = new Batch
-        {
-            InstituteId = instituteId.Value,
-            TradeId = request.TradeId,
-            StartAcademicSessionId = request.StartAcademicSessionId,
-            StartDate = request.StartDate,
-            Name = request.Name.Trim(),
-            Code = request.Code?.Trim(),
-            Capacity = request.Capacity,
-            IsActive = true
-        };
-
-        await _context.Batches.AddAsync(batch, ct);
-        await _context.SaveChangesAsync(ct);
-
-        batch.Trade = trade;
-        batch.StartAcademicSession = academicSession;
-
-        var dto = batch.ToDto();
-        var calcResult = BatchYearLevelCalculator.Calculate(batch, trade, academicSession);
-        dto.ComputedStatus = calcResult.Status;
-        dto.ComputedYearLevel = calcResult.YearLevel.HasValue ? (int)calcResult.YearLevel.Value : null;
-        dto.ComputedYearLevelLabel = calcResult.Label;
-
-        return Result<BatchDto>.Success(dto);
     }
 
     public async Task<Result<BatchDto>> UpdateBatchAsync(Guid id, UpdateBatchRequest request, Guid? academicSessionId, CancellationToken ct)
@@ -400,6 +420,19 @@ public class BatchService : IBatchService
             await _context.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(ct);
+            var currentBatch = await _context.Batches
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == id, ct);
+            if (currentBatch is null)
+                return Result.Failure("Batch no longer exists.");
+            if (currentBatch.IsDeleted)
+                return Result.Failure("Batch was already deleted by another user.");
+            return Result.Failure("Batch was modified by another user. Please refresh and try again.");
+        }
         catch
         {
             await transaction.RollbackAsync(ct);
@@ -422,6 +455,22 @@ public class BatchService : IBatchService
             return "Access denied. Batch does not belong to your institute.";
 
         return null;
+    }
+
+    private static bool IsPostgresSerializationFailure(Exception ex)
+    {
+        var current = ex;
+        while (current is not null)
+        {
+            if (current.GetType().Name == "PostgresException")
+            {
+                var sqlState = current.GetType().GetProperty("SqlState")?.GetValue(current)?.ToString();
+                if (sqlState == "40001")
+                    return true;
+            }
+            current = current.InnerException;
+        }
+        return false;
     }
 
     public async Task<Result> ArchiveBatchAsync(Guid id, CancellationToken ct)
@@ -514,6 +563,19 @@ public class BatchService : IBatchService
                 new { IsDeleted = false }, ct);
             await _context.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(ct);
+            var currentBatch = await _context.Batches
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == id, ct);
+            if (currentBatch is null)
+                return Result.Failure("Batch no longer exists.");
+            if (!currentBatch.IsDeleted)
+                return Result.Failure("Batch is already active.");
+            return Result.Failure("Batch was modified by another user. Please refresh and try again.");
         }
         catch
         {

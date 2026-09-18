@@ -11,6 +11,7 @@ import {
 } from '../navigation/navigationConfig';
 
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
+const AuthCallbackPage = lazy(() => import('../pages/auth/AuthCallbackPage'));
 const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'));
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
@@ -56,6 +57,10 @@ export const routeConfig = [
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/auth/callback',
+    element: <AuthCallbackPage />,
   },
   {
     path: '/forgot-password',
